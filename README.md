@@ -4,6 +4,30 @@
 [![Tests](https://github.com/dmatscheko/history_mover/actions/workflows/test.yml/badge.svg)](https://github.com/dmatscheko/history_mover/actions/workflows/test.yml)
 [![Validate](https://github.com/dmatscheko/history_mover/actions/workflows/validate.yml/badge.svg)](https://github.com/dmatscheko/history_mover/actions/workflows/validate.yml)
 
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+> UNTESTED - DO NOT USE!
+
 A Home Assistant integration that **moves recorder history — states *and* long-term
 statistics — from one entity onto another**, so a replacement sensor can adopt the
 long history of the one it supersedes and keep recording into it.
