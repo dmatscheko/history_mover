@@ -1,0 +1,34 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+jobs:
+  hassfest:
+    name: Hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Deliberately not SHA-pinned: hassfest validates against Home
+      # Assistant's *current* integration standards, has no releases, and is
+      # documented to be used from master. A pinned SHA would freeze the
+      # validation rules and silently rot.
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: HACS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Deliberately not SHA-pinned: the HACS validator evolves with the HACS
+      # store requirements and is documented to be used from main.
+      # No ignore key: the hacs/default submission requires a run without one,
+      # and the brands check accepts the bundled brand/ directory.
+      - uses: hacs/action@main
+        with:
+          category: integration

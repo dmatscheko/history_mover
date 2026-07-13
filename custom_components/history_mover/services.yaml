@@ -1,0 +1,42 @@
+rename:
+  fields:
+    old_entity_id:
+      required: false
+      example: sensor.solax_pv_power
+      selector:
+        text:
+    new_entity_id:
+      required: false
+      example: sensor.my_inverter_pv_power
+      selector:
+        text:
+    renames:
+      required: false
+      example: |
+        - old_entity_id: sensor.solax_pv_power
+          new_entity_id: sensor.my_inverter_pv_power
+        - old_entity_id: sensor.solax_today_yield
+          new_entity_id: sensor.my_inverter_today_yield
+      selector:
+        object:
+    on_conflict:
+      required: false
+      default: replace
+      selector:
+        select:
+          mode: dropdown
+          translation_key: on_conflict
+          options:
+            - replace
+            - skip
+            - fail
+    dry_run:
+      required: false
+      default: false
+      selector:
+        boolean:
+    scan_references:
+      required: false
+      default: true
+      selector:
+        boolean:

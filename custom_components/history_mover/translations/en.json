@@ -1,0 +1,101 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "History Mover",
+        "description": "Add History Mover. It adds a `history_mover.rename` action and a guided rename screen (this card's **Configure** button) that move recorder history from one entity to another."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "History Mover is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Move history",
+        "menu_options": {
+          "single": "Single entity",
+          "bulk": "Bulk (by prefix)"
+        }
+      },
+      "single": {
+        "title": "Move history — single",
+        "description": "Move the recorder history of one entity onto another.",
+        "data": {
+          "old_entity_id": "Source entity ID",
+          "new_entity_id": "Target entity ID",
+          "on_conflict": "On conflict"
+        },
+        "data_description": {
+          "old_entity_id": "The id whose history to keep — may be an id no longer in the entity registry.",
+          "new_entity_id": "The id that should own the history and keep recording into it.",
+          "on_conflict": "What to do if the target already holds history of the same kind."
+        }
+      },
+      "bulk": {
+        "title": "Move history — bulk",
+        "description": "Move every recorder history whose id starts with the source prefix onto the same id with the target prefix. Ids no longer in the registry are included. For arbitrary mappings, use the `history_mover.rename` action with a list.",
+        "data": {
+          "old_prefix": "Source prefix",
+          "new_prefix": "Target prefix",
+          "on_conflict": "On conflict"
+        },
+        "data_description": {
+          "old_prefix": "For example `sensor.solax_`.",
+          "new_prefix": "For example `sensor.my_inverter_`.",
+          "on_conflict": "What to do if a target already holds history of the same kind."
+        }
+      },
+      "confirm": {
+        "title": "Confirm",
+        "description": "This changes the recorder database and cannot be undone. Review, then submit to apply.\n\n{summary}"
+      }
+    },
+    "error": {
+      "same_id": "Source and target must be different.",
+      "no_matches": "No recorder history was found for that source prefix."
+    }
+  },
+  "services": {
+    "rename": {
+      "name": "Rename (move history)",
+      "description": "Moves recorder history (states and long-term statistics) from a source entity id onto a target id. If the target already has history of the same kind, it is discarded and replaced, so a replacement sensor can adopt the old history and keep recording into it.",
+      "fields": {
+        "old_entity_id": {
+          "name": "Source entity ID",
+          "description": "The id whose history you want to keep — including an id that no longer exists in the entity registry. Use with 'Target entity ID' for a single rename."
+        },
+        "new_entity_id": {
+          "name": "Target entity ID",
+          "description": "The id that should own the history from now on. Its own existing history of the same kind is discarded (see 'On conflict')."
+        },
+        "renames": {
+          "name": "Renames (bulk)",
+          "description": "A list of {old_entity_id, new_entity_id} pairs, to move many at once instead of a single pair."
+        },
+        "on_conflict": {
+          "name": "On conflict",
+          "description": "What to do when the target id already holds history of the same kind that the source is about to move onto it."
+        },
+        "dry_run": {
+          "name": "Dry run",
+          "description": "Only report what would happen (counts of moved and discarded rows). Nothing is changed. Call with 'Return response' to see the preview."
+        },
+        "scan_references": {
+          "name": "Scan references",
+          "description": "After moving, report configuration files that still mention the old id (automations, scripts, scenes, dashboards, UI helpers). Nothing is edited."
+        }
+      }
+    }
+  },
+  "selector": {
+    "on_conflict": {
+      "options": {
+        "replace": "Replace — discard the target's history, then adopt the source's",
+        "skip": "Skip — leave this pair unchanged",
+        "fail": "Fail — report this pair as failed"
+      }
+    }
+  }
+}

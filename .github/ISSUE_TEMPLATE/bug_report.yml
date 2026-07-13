@@ -1,0 +1,42 @@
+name: Bug report
+description: A rename did the wrong thing — history lost, not moved, or not continued
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Thanks for the report! History Mover edits the recorder database, so
+        the **exact entity IDs** and whether you used **dry run** first are the
+        most useful details.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: Include the source and target entity IDs and which history (states, statistics, or both) was affected.
+      placeholder: "Moved sensor.solax_pv_power -> sensor.myinv_pv_power; the states history moved but long-term statistics did not."
+    validations:
+      required: true
+  - type: input
+    id: recorder
+    attributes:
+      label: Recorder backend
+      description: SQLite (default) or an external database.
+      placeholder: "SQLite  ·  or: MariaDB 11, PostgreSQL 16"
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: "Home Assistant 2026.7.1, History Mover 0.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log output
+      description: >
+        Relevant lines from Settings → System → Logs. Debug logging helps —
+        add to configuration.yaml:
+        `logger: {logs: {custom_components.history_mover: debug}}`
+      render: text

@@ -1,0 +1,101 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "History Mover",
+        "description": "History Mover hinzufügen. Es stellt die Aktion `history_mover.rename` und einen geführten Umbenennen-Dialog (Schaltfläche **Konfigurieren** auf dieser Karte) bereit, die den Recorder-Verlauf von einer Entität auf eine andere verschieben."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "History Mover ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Verlauf verschieben",
+        "menu_options": {
+          "single": "Einzelne Entität",
+          "bulk": "Sammel (nach Präfix)"
+        }
+      },
+      "single": {
+        "title": "Verlauf verschieben — einzeln",
+        "description": "Den Recorder-Verlauf einer Entität auf eine andere verschieben.",
+        "data": {
+          "old_entity_id": "Quell-Entitäts-ID",
+          "new_entity_id": "Ziel-Entitäts-ID",
+          "on_conflict": "Bei Konflikt"
+        },
+        "data_description": {
+          "old_entity_id": "Die ID, deren Verlauf behalten werden soll — darf eine ID sein, die nicht mehr in der Entitätsregistrierung steht.",
+          "new_entity_id": "Die ID, die den Verlauf besitzen und darin weiter aufzeichnen soll.",
+          "on_conflict": "Was zu tun ist, wenn das Ziel bereits Verlauf derselben Art hat."
+        }
+      },
+      "bulk": {
+        "title": "Verlauf verschieben — Sammel",
+        "description": "Jeden Recorder-Verlauf, dessen ID mit dem Quell-Präfix beginnt, auf dieselbe ID mit dem Ziel-Präfix verschieben. IDs, die nicht mehr in der Registrierung stehen, sind eingeschlossen. Für beliebige Zuordnungen die Aktion `history_mover.rename` mit einer Liste verwenden.",
+        "data": {
+          "old_prefix": "Quell-Präfix",
+          "new_prefix": "Ziel-Präfix",
+          "on_conflict": "Bei Konflikt"
+        },
+        "data_description": {
+          "old_prefix": "Zum Beispiel `sensor.solax_`.",
+          "new_prefix": "Zum Beispiel `sensor.my_inverter_`.",
+          "on_conflict": "Was zu tun ist, wenn ein Ziel bereits Verlauf derselben Art hat."
+        }
+      },
+      "confirm": {
+        "title": "Bestätigen",
+        "description": "Dies ändert die Recorder-Datenbank und kann nicht rückgängig gemacht werden. Prüfen und dann zum Anwenden absenden.\n\n{summary}"
+      }
+    },
+    "error": {
+      "same_id": "Quelle und Ziel müssen unterschiedlich sein.",
+      "no_matches": "Für dieses Quell-Präfix wurde kein Recorder-Verlauf gefunden."
+    }
+  },
+  "services": {
+    "rename": {
+      "name": "Umbenennen (Verlauf verschieben)",
+      "description": "Verschiebt den Recorder-Verlauf (Zustände und Langzeitstatistik) von einer Quell-Entitäts-ID auf eine Ziel-ID. Hat das Ziel bereits Verlauf derselben Art, wird dieser verworfen und ersetzt, sodass ein Ersatz-Sensor den alten Verlauf übernehmen und darin weiter aufzeichnen kann.",
+      "fields": {
+        "old_entity_id": {
+          "name": "Quell-Entitäts-ID",
+          "description": "Die ID, deren Verlauf du behalten möchtest — auch eine ID, die es in der Entitätsregistrierung nicht mehr gibt. Zusammen mit „Ziel-Entitäts-ID“ für eine einzelne Umbenennung."
+        },
+        "new_entity_id": {
+          "name": "Ziel-Entitäts-ID",
+          "description": "Die ID, die den Verlauf ab jetzt besitzen soll. Ihr eigener vorhandener Verlauf derselben Art wird verworfen (siehe „Bei Konflikt“)."
+        },
+        "renames": {
+          "name": "Umbenennungen (Sammel)",
+          "description": "Eine Liste von {old_entity_id, new_entity_id}-Paaren, um viele auf einmal statt eines einzelnen Paares zu verschieben."
+        },
+        "on_conflict": {
+          "name": "Bei Konflikt",
+          "description": "Was zu tun ist, wenn das Ziel bereits Verlauf derselben Art hat, die die Quelle darauf verschieben will."
+        },
+        "dry_run": {
+          "name": "Testlauf",
+          "description": "Nur melden, was passieren würde (Anzahl verschobener und verworfener Zeilen). Es wird nichts geändert. Mit „Antwort zurückgeben“ aufrufen, um die Vorschau zu sehen."
+        },
+        "scan_references": {
+          "name": "Verweise suchen",
+          "description": "Nach dem Verschieben Konfigurationsdateien melden, die die alte ID noch nennen (Automationen, Skripte, Szenen, Dashboards, UI-Helfer). Es wird nichts bearbeitet."
+        }
+      }
+    }
+  },
+  "selector": {
+    "on_conflict": {
+      "options": {
+        "replace": "Ersetzen — den Verlauf des Ziels verwerfen und den der Quelle übernehmen",
+        "skip": "Überspringen — dieses Paar unverändert lassen",
+        "fail": "Fehlschlagen — dieses Paar als fehlgeschlagen melden"
+      }
+    }
+  }
+}

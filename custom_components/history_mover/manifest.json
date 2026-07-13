@@ -1,0 +1,14 @@
+{
+  "domain": "history_mover",
+  "name": "History Mover",
+  "codeowners": ["@dmatscheko"],
+  "config_flow": true,
+  "dependencies": ["recorder"],
+  "documentation": "https://github.com/dmatscheko/history_mover",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/dmatscheko/history_mover/issues",
+  "quality_scale": "custom",
+  "single_config_entry": true,
+  "version": "0.1.0"
+}

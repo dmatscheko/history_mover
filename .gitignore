@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.complexipy_cache/
+.coverage
+htmlcov/
+.DS_Store
+.claude

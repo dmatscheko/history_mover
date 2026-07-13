@@ -1,0 +1,27 @@
+[project]
+name = "history-mover"
+version = "0.1.0"
+description = "Home Assistant integration to move recorder history (states and long-term statistics) from one entity to another, so a replaced sensor keeps its long history and keeps recording into it"
+# Every supported HA release (hacs.json: >= 2026.3) requires Python >= 3.14.2.
+requires-python = ">=3.14"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+# The floor from requires-python (HA itself uses 3.14-only syntax).
+python_version = "3.14"
+strict = true
+# Home Assistant re-exports (e.g. recorder.Recorder) without __all__;
+# core's own mypy setup allows this too.
+implicit_reexport = true
+files = ["custom_components/history_mover"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF"]
+ignore = ["E501"]
