@@ -126,7 +126,11 @@ async def async_perform_rename(
 
 
 def _collect_requests(data: Mapping[str, Any]) -> list[RenameRequest]:
-    """Normalise the single-pair and list forms into one validated list."""
+    """Normalise the single-pair and list forms into one list.
+
+    Batch semantics (duplicate or overlapping ids) are validated by the engine,
+    so every caller of ``async_move_history`` gets the same protection.
+    """
     pairs: list[RenameRequest] = []
     if ATTR_RENAMES in data:
         pairs.extend(
@@ -145,29 +149,7 @@ def _collect_requests(data: Mapping[str, Any]) -> list[RenameRequest]:
         raise ServiceValidationError(
             "Provide old_entity_id and new_entity_id, or a renames list."
         )
-    _reject_ambiguous(pairs)
     return pairs
-
-
-def _reject_ambiguous(pairs: list[RenameRequest]) -> None:
-    """A pair must move a distinct source to a distinct target within one call."""
-    seen_old: set[str] = set()
-    seen_new: set[str] = set()
-    for pair in pairs:
-        if pair.old_entity_id == pair.new_entity_id:
-            raise ServiceValidationError(
-                f"Source and target are the same id: {pair.old_entity_id}"
-            )
-        if pair.old_entity_id in seen_old:
-            raise ServiceValidationError(
-                f"The same source appears twice in one call: {pair.old_entity_id}"
-            )
-        if pair.new_entity_id in seen_new:
-            raise ServiceValidationError(
-                f"The same target appears twice in one call: {pair.new_entity_id}"
-            )
-        seen_old.add(pair.old_entity_id)
-        seen_new.add(pair.new_entity_id)
 
 
 @callback

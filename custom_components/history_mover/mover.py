@@ -47,7 +47,7 @@ from homeassistant.components.recorder.db_schema import (
 )
 from homeassistant.components.recorder.tasks import RecorderTask
 from homeassistant.components.recorder.util import session_scope
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from sqlalchemy import func
 
 from .const import (
@@ -140,6 +140,38 @@ def _list_history_ids(hass: HomeAssistant, prefix: str) -> list[str]:
     return sorted(ids)
 
 
+def _validate_requests(requests: list[RenameRequest]) -> None:
+    """Reject batches whose outcome would be ambiguous or order-dependent.
+
+    Every id must be a distinct source moving to a distinct, unrelated target.
+    An id on both sides (a swap or a chain) would make the result depend on
+    processing order — and, with ``replace``, silently destroy history.
+    """
+    seen_old: set[str] = set()
+    seen_new: set[str] = set()
+    for req in requests:
+        if req.old_entity_id == req.new_entity_id:
+            raise ServiceValidationError(
+                f"Source and target are the same id: {req.old_entity_id}"
+            )
+        if req.old_entity_id in seen_old:
+            raise ServiceValidationError(
+                f"The same source appears twice in one call: {req.old_entity_id}"
+            )
+        if req.new_entity_id in seen_new:
+            raise ServiceValidationError(
+                f"The same target appears twice in one call: {req.new_entity_id}"
+            )
+        seen_old.add(req.old_entity_id)
+        seen_new.add(req.new_entity_id)
+    if overlap := seen_old & seen_new:
+        raise ServiceValidationError(
+            f"The same id appears as both a source and a target in one call: "
+            f"{sorted(overlap)[0]}. The outcome would depend on processing "
+            "order — split this into separate calls."
+        )
+
+
 async def async_move_history(
     hass: HomeAssistant,
     requests: Iterable[RenameRequest],
@@ -150,11 +182,15 @@ async def async_move_history(
     """Move history for each request; return one outcome per request, in order.
 
     Queues a single task on the recorder thread and waits for it. A dry run
-    reads counts and reports the decision without changing anything.
+    reads counts and reports the decision without changing anything. Raises
+    ``ServiceValidationError`` for a batch whose ids collide (see
+    ``_validate_requests``).
     """
+    request_list = list(requests)
+    _validate_requests(request_list)
     instance = get_instance(hass)
     task = _RenameHistoryTask(
-        requests=list(requests), on_conflict=on_conflict, dry_run=dry_run
+        requests=request_list, on_conflict=on_conflict, dry_run=dry_run
     )
     instance.queue_task(task)
     finished = await hass.async_add_executor_job(task.done.wait, RECORDER_TASK_TIMEOUT)

@@ -105,6 +105,18 @@ async def test_dry_run_previews_without_change(
                 {"old_entity_id": "sensor.a", "new_entity_id": "sensor.y"},
             ]
         },
+        {  # swap: each id is both a source and a target
+            "renames": [
+                {"old_entity_id": "sensor.a", "new_entity_id": "sensor.b"},
+                {"old_entity_id": "sensor.b", "new_entity_id": "sensor.a"},
+            ]
+        },
+        {  # chain: sensor.b is a target and a source
+            "renames": [
+                {"old_entity_id": "sensor.a", "new_entity_id": "sensor.b"},
+                {"old_entity_id": "sensor.b", "new_entity_id": "sensor.c"},
+            ]
+        },
     ],
 )
 async def test_validation_errors(

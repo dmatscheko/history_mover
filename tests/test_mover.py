@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 from homeassistant.components.recorder import Recorder, get_instance
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from custom_components.history_mover.const import (
     CONFLICT_FAIL,
@@ -201,6 +201,36 @@ async def test_list_history_ids_covers_states_and_statistics(
     ids = await async_list_history_ids(hass, "sensor.pref_")
     assert set(ids) == {"sensor.pref_states", "sensor.pref_stats"}
     assert await async_list_history_ids(hass, "sensor.zzz_") == []
+
+
+async def test_overlapping_batch_is_rejected_before_touching_anything(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """An id on both sides of one batch (swap or chain) is rejected up front:
+    the outcome would depend on processing order and, with 'replace', would
+    silently destroy the intermediate id's history."""
+    await record_states(hass, "sensor.ov_a", ["1", "2"])
+    await record_states(hass, "sensor.ov_b", ["9", "8", "7"])
+
+    with pytest.raises(ServiceValidationError, match="both a source and a target"):
+        await async_move_history(
+            hass,
+            [
+                RenameRequest("sensor.ov_a", "sensor.ov_b"),
+                RenameRequest("sensor.ov_b", "sensor.ov_a"),  # swap
+            ],
+        )
+    with pytest.raises(ServiceValidationError, match="both a source and a target"):
+        await async_move_history(
+            hass,
+            [
+                RenameRequest("sensor.ov_a", "sensor.ov_b"),
+                RenameRequest("sensor.ov_b", "sensor.ov_c"),  # chain
+            ],
+        )
+    # Nothing moved, nothing discarded.
+    assert await count_states(hass, "sensor.ov_a") == 2
+    assert await count_states(hass, "sensor.ov_b") == 3
 
 
 async def test_engine_error_surfaces_as_home_assistant_error(

@@ -28,7 +28,8 @@ Statuses are updated as fixes land; each fix is its own commit.
 - **Fix:** batch validation belongs to the shared engine (`async_move_history`), not the
   service layer: same-id, duplicate source, duplicate target, and a new
   source∩target overlap check. Split calls stay possible and are order-explicit.
-- **Status:** open — planned fix: `reject ids used as both source and target in one call`
+- **Status:** fixed — validation moved into `async_move_history` with a new
+  source∩target overlap check; regression tests for swap and chain batches.
 
 ### B2 (high) — the options flow accepts invalid/uppercase ids and strands history
 

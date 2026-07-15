@@ -123,7 +123,10 @@ data:
 | `dry_run` | `false` | Report what *would* happen; change nothing. Call with *Return response* to see it. |
 | `scan_references` | `true` | After moving, report config files that still mention the old id (see below). |
 
-Provide **either** `old_entity_id` + `new_entity_id`, **or** `renames`.
+Provide **either** `old_entity_id` + `new_entity_id`, **or** `renames`. Within one
+call, no id may appear twice — and not as both a source and a target (no swaps or
+chains): the outcome would depend on processing order. Run those as separate calls,
+in the order you intend.
 
 ### Example: migrating a device (e.g. SolaX → a different integration)
 
