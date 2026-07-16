@@ -157,7 +157,8 @@ Statuses are updated as fixes land; each fix is its own commit.
   ([references.py](custom_components/history_mover/references.py)) does the same in
   miniature.
 - **Alignment:** both use `dataclasses.asdict`.
-- **Status:** open — planned fix: `use dataclasses.asdict for response serialisation`
+- **Status:** aligned — both delegate to `dataclasses.asdict`; a new field can no
+  longer silently miss the response.
 
 ### C5 — German wording for "bulk"
 

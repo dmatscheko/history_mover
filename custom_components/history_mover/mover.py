@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.recorder import get_instance
@@ -97,17 +97,7 @@ class RenameOutcome:
 
     def as_dict(self) -> dict[str, Any]:
         """Plain dict for the service response (JSON-serialisable)."""
-        return {
-            "old_entity_id": self.old_entity_id,
-            "new_entity_id": self.new_entity_id,
-            "status": self.status,
-            "applied": self.applied,
-            "moved_states": self.moved_states,
-            "discarded_states": self.discarded_states,
-            "moved_statistics": self.moved_statistics,
-            "discarded_statistics": self.discarded_statistics,
-            "detail": self.detail,
-        }
+        return asdict(self)
 
 
 async def async_list_history_ids(hass: HomeAssistant, prefix: str) -> list[str]:

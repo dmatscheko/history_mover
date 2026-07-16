@@ -15,7 +15,7 @@ match ``sensor.power_total`` or ``binary_sensor.power``.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -46,7 +46,7 @@ class ReferenceHit:
     count: int
 
     def as_dict(self) -> dict[str, object]:
-        return {"source": self.source, "count": self.count}
+        return asdict(self)
 
 
 async def async_scan_references(
