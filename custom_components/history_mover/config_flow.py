@@ -18,6 +18,7 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.core import callback
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
@@ -48,6 +49,18 @@ def _conflict_selector() -> SelectSelector:
             mode=SelectSelectorMode.DROPDOWN,
         )
     )
+
+
+def _validated_entity_id(value: str, field: str, errors: dict[str, str]) -> str:
+    """Normalise with the service's own validator (strip, lowercase, validate).
+
+    On failure, records a per-field ``invalid_entity_id`` error and returns "".
+    """
+    try:
+        return cv.entity_id(value.strip())
+    except vol.Invalid:
+        errors[field] = "invalid_entity_id"
+        return ""
 
 
 class HistoryMoverConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -89,11 +102,15 @@ class HistoryMoverOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            old = user_input[ATTR_OLD_ENTITY_ID].strip()
-            new = user_input[ATTR_NEW_ENTITY_ID].strip()
-            if old == new:
+            old = _validated_entity_id(
+                user_input[ATTR_OLD_ENTITY_ID], ATTR_OLD_ENTITY_ID, errors
+            )
+            new = _validated_entity_id(
+                user_input[ATTR_NEW_ENTITY_ID], ATTR_NEW_ENTITY_ID, errors
+            )
+            if not errors and old == new:
                 errors["base"] = "same_id"
-            else:
+            if not errors:
                 self._pairs = [RenameRequest(old, new)]
                 self._on_conflict = user_input[ATTR_ON_CONFLICT]
                 return await self.async_step_confirm()

@@ -233,6 +233,21 @@ async def test_overlapping_batch_is_rejected_before_touching_anything(
     assert await count_states(hass, "sensor.ov_b") == 3
 
 
+async def test_invalid_target_id_is_rejected(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """Relabelling history to a structurally invalid id would strand it where
+    nothing can ever record into (or address) it again — refuse up front."""
+    await record_states(hass, "sensor.valid_src", ["1"])
+
+    for bad_target in ("Sensor.Upper", "no_domain", "sensor.bad target"):
+        with pytest.raises(ServiceValidationError, match="not a valid entity id"):
+            await async_move_history(
+                hass, [RenameRequest("sensor.valid_src", bad_target)]
+            )
+    assert await count_states(hass, "sensor.valid_src") == 1
+
+
 async def test_engine_error_surfaces_as_home_assistant_error(
     recorder_mock: Recorder, hass: HomeAssistant
 ) -> None:

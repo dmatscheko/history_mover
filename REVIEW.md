@@ -45,7 +45,8 @@ Statuses are updated as fixes land; each fix is its own commit.
 - **Fix:** the flow validates and normalises both ids with the same `cv.entity_id`
   validator the service uses (shows an `invalid_entity_id` form error); the engine
   additionally refuses structurally invalid *target* ids as a backstop for any caller.
-- **Status:** open — planned fix: `validate and normalise entity ids in the options flow`
+- **Status:** fixed — the flow validates both ids with `cv.entity_id` (per-field
+  `invalid_entity_id` errors); the engine refuses invalid target ids for any caller.
 
 ### B3 (medium) — bulk flow: an empty source prefix matches every recorder id
 

@@ -54,6 +54,7 @@
     },
     "error": {
       "same_id": "Quelle und Ziel müssen unterschiedlich sein.",
+      "invalid_entity_id": "Gib eine gültige Entitäts-ID ein: kleingeschrieben im Format `domain.object_id`, zum Beispiel `sensor.pv_power`.",
       "no_matches": "Für dieses Quell-Präfix wurde kein Recorder-Verlauf gefunden."
     }
   },

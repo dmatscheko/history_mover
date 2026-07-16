@@ -47,6 +47,7 @@ from homeassistant.components.recorder.db_schema import (
 )
 from homeassistant.components.recorder.tasks import RecorderTask
 from homeassistant.components.recorder.util import session_scope
+from homeassistant.core import valid_entity_id
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from sqlalchemy import func
 
@@ -146,10 +147,21 @@ def _validate_requests(requests: list[RenameRequest]) -> None:
     Every id must be a distinct source moving to a distinct, unrelated target.
     An id on both sides (a swap or a chain) would make the result depend on
     processing order — and, with ``replace``, silently destroy history.
+
+    Targets must be structurally valid entity ids: live recording only ever
+    writes lower-case ``domain.object_id`` ids, so relabelling history to
+    anything else would strand it where nothing can record into it — or address
+    it again. Sources are only looked up, so they stay unrestricted (an invalid
+    source is a harmless noop, and a permissive lookup keeps a rescue path for
+    ids that should not exist).
     """
     seen_old: set[str] = set()
     seen_new: set[str] = set()
     for req in requests:
+        if not valid_entity_id(req.new_entity_id):
+            raise ServiceValidationError(
+                f"Target is not a valid entity id: {req.new_entity_id}"
+            )
         if req.old_entity_id == req.new_entity_id:
             raise ServiceValidationError(
                 f"Source and target are the same id: {req.old_entity_id}"

@@ -54,6 +54,57 @@ async def test_single_rename_via_options(
     assert await count_states(hass, "sensor.opt_old") is None
 
 
+async def test_single_normalises_case_and_whitespace(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """Ids are normalised exactly like the service's cv.entity_id — otherwise an
+    uppercase target would strand the history under an id that live recording
+    (always lower-case) can never continue."""
+    entry = await _setup_entry(hass)
+    await record_states(hass, "sensor.norm_old", ["1", "2"])
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "single"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "old_entity_id": " SENSOR.NORM_OLD ",
+            "new_entity_id": "Sensor.Norm_New",
+            "on_conflict": "replace",
+        },
+    )
+    assert result["step_id"] == "confirm"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    await hass.async_block_till_done()
+    assert await count_states(hass, "sensor.norm_new") == 2
+    assert await count_states(hass, "sensor.norm_old") is None
+
+
+async def test_single_rejects_invalid_ids(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    entry = await _setup_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "single"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "old_entity_id": "not_an_entity",
+            "new_entity_id": "sensor.bad target",
+            "on_conflict": "replace",
+        },
+    )
+    assert result["step_id"] == "single"
+    assert result["errors"] == {
+        "old_entity_id": "invalid_entity_id",
+        "new_entity_id": "invalid_entity_id",
+    }
+
+
 async def test_single_rejects_same_id(
     recorder_mock: Recorder, hass: HomeAssistant
 ) -> None:

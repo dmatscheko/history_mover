@@ -54,6 +54,7 @@
     },
     "error": {
       "same_id": "Source and target must be different.",
+      "invalid_entity_id": "Enter a valid entity ID: lower-case `domain.object_id`, for example `sensor.pv_power`.",
       "no_matches": "No recorder history was found for that source prefix."
     }
   },
