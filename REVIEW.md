@@ -83,7 +83,9 @@ Statuses are updated as fixes land; each fix is its own commit.
   not tell the user that the queued task may still complete afterwards.
 - **Fix:** log each applied pair (info) and each preview/skip/noop (debug); extend the
   timeout message.
-- **Status:** open — planned fix: `log every outcome and clarify the timeout error`
+- **Status:** fixed — applied pairs log at info with row counts, other outcomes at
+  debug (after commit, so log lines promise durable changes); the timeout message
+  now points at the log.
 
 ### B6 (low) — a failure while applying from the UI aborts the flow with "Unknown error"
 

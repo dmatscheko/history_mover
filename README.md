@@ -167,8 +167,8 @@ and `.storage/core.config_entries` (UI-created helpers). Matches are whole-id on
 
 - Admin-only action.
 - **Dry run** first; the UI always previews before applying.
-- Every action is logged; enable debug with
-  `logger: {logs: {custom_components.history_mover: debug}}`.
+- Every applied move is logged (with row counts); previews, skips and noops log
+  at debug — enable with `logger: {logs: {custom_components.history_mover: debug}}`.
 - Take a backup before large migrations — the discard is not reversible.
 
 ## Limitations

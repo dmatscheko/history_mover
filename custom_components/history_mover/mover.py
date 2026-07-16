@@ -211,7 +211,9 @@ async def async_move_history(
     finished = await hass.async_add_executor_job(task.done.wait, RECORDER_TASK_TIMEOUT)
     if not finished:
         raise HomeAssistantError(
-            "Timed out waiting for the recorder to finish moving history."
+            "Timed out waiting for the recorder to finish moving history. The"
+            " queued move may still complete in the background — check the log"
+            " for 'Moved history' entries before retrying."
         )
     if task.error is not None:
         raise HomeAssistantError(
@@ -264,6 +266,30 @@ def _run_batch(
             if outcome.applied:
                 touched.add(req.old_entity_id)
                 touched.add(req.new_entity_id)
+
+    # Log only after the transaction committed — these lines promise durable
+    # changes (a failed batch is logged by the task's error handler instead).
+    for outcome in outcomes:
+        if outcome.applied:
+            _LOGGER.info(
+                "Moved history %s -> %s (%s): moved %d states / %d statistics,"
+                " discarded %d / %d",
+                outcome.old_entity_id,
+                outcome.new_entity_id,
+                outcome.status,
+                outcome.moved_states,
+                outcome.moved_statistics,
+                outcome.discarded_states,
+                outcome.discarded_statistics,
+            )
+        else:
+            _LOGGER.debug(
+                "No change for %s -> %s (%s): %s",
+                outcome.old_entity_id,
+                outcome.new_entity_id,
+                outcome.status,
+                outcome.detail,
+            )
 
     # Only after the writes are committed, and only on this (recorder) thread,
     # fix the in-memory caches so live recording continues into the adopted

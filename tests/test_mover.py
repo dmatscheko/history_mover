@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import patch
 
 import pytest
@@ -231,6 +232,24 @@ async def test_overlapping_batch_is_rejected_before_touching_anything(
     # Nothing moved, nothing discarded.
     assert await count_states(hass, "sensor.ov_a") == 2
     assert await count_states(hass, "sensor.ov_b") == 3
+
+
+async def test_every_outcome_is_logged(
+    recorder_mock: Recorder, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Applied moves log at info (the README promises a trace); everything else
+    at debug."""
+    await record_states(hass, "sensor.log_src", ["1"])
+    logger = "custom_components.history_mover.mover"
+    with caplog.at_level(logging.DEBUG, logger=logger):
+        await async_move_history(
+            hass, [RenameRequest("sensor.log_src", "sensor.log_dst")]
+        )
+        await async_move_history(
+            hass, [RenameRequest("sensor.log_absent", "sensor.log_dst2")]
+        )
+    assert "Moved history sensor.log_src -> sensor.log_dst (renamed)" in caplog.text
+    assert "No change for sensor.log_absent -> sensor.log_dst2 (noop)" in caplog.text
 
 
 async def test_invalid_target_id_is_rejected(
