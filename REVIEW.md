@@ -63,7 +63,8 @@ Statuses are updated as fixes land; each fix is its own commit.
 - **Fix:** lowercase both prefixes, require a non-empty source prefix, validate every
   generated target id, and show a dedicated error when generated targets overlap the
   source set (the friendly-UI face of B1's engine check).
-- **Status:** open — planned fix: `guard the bulk flow against empty and overlapping prefixes`
+- **Status:** fixed — prefixes are stripped/lower-cased; empty source prefix,
+  invalid generated targets, and source∩target overlap each get a form error.
 
 ### B4 (low) — history id listing runs on the wrong executor
 
@@ -121,7 +122,9 @@ Statuses are updated as fixes land; each fix is its own commit.
   semantics validation (B1) and target-format backstop (B2); both callers reuse
   `cv.entity_id` for per-field validation/normalisation (the service already did; the
   flow now does, with friendly per-field errors, which the service cannot show).
-- **Status:** open — aligned via the B1/B2/B3 fixes
+- **Status:** aligned — engine owns batch validation (B1) and the target-format
+  backstop (B2); both callers normalise per-field input via `cv.entity_id`
+  semantics (B2/B3).
 
 ### C2 — flow field-name constants live apart from their siblings
 

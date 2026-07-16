@@ -174,3 +174,82 @@ async def test_bulk_reports_no_matches(
     )
     assert result["step_id"] == "bulk"
     assert result["errors"] == {"base": "no_matches"}
+
+
+async def _bulk_errors(
+    hass: HomeAssistant, entry: ConfigEntry, old_prefix: str, new_prefix: str
+) -> dict[str, str]:
+    """Submit the bulk form once and return its validation errors."""
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "bulk"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "old_prefix": old_prefix,
+            "new_prefix": new_prefix,
+            "on_conflict": "replace",
+        },
+    )
+    assert result["step_id"] == "bulk"
+    errors: dict[str, str] = result["errors"]
+    return errors
+
+
+async def test_bulk_rejects_empty_source_prefix(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """An empty source prefix would match every id in the recorder."""
+    entry = await _setup_entry(hass)
+    await record_states(hass, "sensor.bulkempty_a", ["1"])
+    errors = await _bulk_errors(hass, entry, "   ", "sensor.x_")
+    assert errors == {"old_prefix": "empty_prefix"}
+
+
+async def test_bulk_rejects_invalid_generated_targets(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """A domain-less target prefix would strand history under unrecordable ids."""
+    entry = await _setup_entry(hass)
+    await record_states(hass, "sensor.bulkbad_a", ["1"])
+    errors = await _bulk_errors(hass, entry, "sensor.bulkbad_", "x_")
+    assert errors == {"new_prefix": "invalid_target"}
+
+
+async def test_bulk_rejects_overlapping_prefixes(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """A target prefix that extends the source prefix remaps some targets onto
+    other sources — the order-dependent shape the engine refuses (see B1)."""
+    entry = await _setup_entry(hass)
+    await record_states(hass, "sensor.bulkov_a", ["1"])
+    await record_states(hass, "sensor.bulkov_x_a", ["2"])
+    errors = await _bulk_errors(hass, entry, "sensor.bulkov_", "sensor.bulkov_x_")
+    assert errors == {"new_prefix": "overlapping"}
+
+
+async def test_bulk_normalises_prefix_case(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """Prefixes are lower-cased like the recorder ids they must match."""
+    entry = await _setup_entry(hass)
+    await record_states(hass, "sensor.bulkcase_a", ["1", "2"])
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "bulk"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "old_prefix": " SENSOR.BULKCASE_ ",
+            "new_prefix": "SENSOR.CASEMOVED_",
+            "on_conflict": "replace",
+        },
+    )
+    assert result["step_id"] == "confirm"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    await hass.async_block_till_done()
+    assert await count_states(hass, "sensor.casemoved_a") == 2
+    assert await count_states(hass, "sensor.bulkcase_a") is None

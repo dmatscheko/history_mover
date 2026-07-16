@@ -17,7 +17,7 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlow,
 )
-from homeassistant.core import callback
+from homeassistant.core import callback, valid_entity_id
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.selector import (
     SelectSelector,
@@ -133,21 +133,35 @@ class HistoryMoverOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            old_prefix = user_input[ATTR_OLD_PREFIX].strip()
-            new_prefix = user_input[ATTR_NEW_PREFIX].strip()
-            ids = await async_list_history_ids(self.hass, old_prefix)
-            pairs = [
-                RenameRequest(history_id, new_prefix + history_id[len(old_prefix) :])
-                for history_id in ids
-            ]
-            # Drop no-ops (e.g. an unchanged prefix maps an id to itself).
-            pairs = [p for p in pairs if p.old_entity_id != p.new_entity_id]
-            if not pairs:
-                errors["base"] = "no_matches"
+            # Recorder ids are always lower-case, so normalise like the ids are.
+            old_prefix = user_input[ATTR_OLD_PREFIX].strip().lower()
+            new_prefix = user_input[ATTR_NEW_PREFIX].strip().lower()
+            if not old_prefix:
+                # An empty source prefix would match every id in the recorder.
+                errors[ATTR_OLD_PREFIX] = "empty_prefix"
             else:
-                self._pairs = pairs
-                self._on_conflict = user_input[ATTR_ON_CONFLICT]
-                return await self.async_step_confirm()
+                ids = await async_list_history_ids(self.hass, old_prefix)
+                pairs = [
+                    RenameRequest(
+                        history_id, new_prefix + history_id[len(old_prefix) :]
+                    )
+                    for history_id in ids
+                ]
+                # Drop no-ops (e.g. an unchanged prefix maps an id to itself).
+                pairs = [p for p in pairs if p.old_entity_id != p.new_entity_id]
+                if not pairs:
+                    errors["base"] = "no_matches"
+                elif not all(valid_entity_id(p.new_entity_id) for p in pairs):
+                    errors[ATTR_NEW_PREFIX] = "invalid_target"
+                elif {p.new_entity_id for p in pairs} & set(ids):
+                    # A generated target is itself one of the matched sources
+                    # (the target prefix extends the source prefix) — the engine
+                    # rejects such batches as order-dependent.
+                    errors[ATTR_NEW_PREFIX] = "overlapping"
+                else:
+                    self._pairs = pairs
+                    self._on_conflict = user_input[ATTR_ON_CONFLICT]
+                    return await self.async_step_confirm()
         return self.async_show_form(
             step_id="bulk",
             data_schema=vol.Schema(

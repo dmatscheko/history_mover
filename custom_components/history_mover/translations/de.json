@@ -55,6 +55,9 @@
     "error": {
       "same_id": "Quelle und Ziel müssen unterschiedlich sein.",
       "invalid_entity_id": "Gib eine gültige Entitäts-ID ein: kleingeschrieben im Format `domain.object_id`, zum Beispiel `sensor.pv_power`.",
+      "empty_prefix": "Gib ein Quell-Präfix ein, zum Beispiel `sensor.solax_`.",
+      "invalid_target": "Dieses Ziel-Präfix erzeugt ungültige IDs — jedes Ergebnis muss eine kleingeschriebene `domain.object_id` sein.",
+      "overlapping": "Die umbenannten IDs würden sich mit den umzubenennenden IDs überschneiden (das Ziel-Präfix darf das Quell-Präfix nicht erweitern). Teile dies in getrennte Vorgänge auf.",
       "no_matches": "Für dieses Quell-Präfix wurde kein Recorder-Verlauf gefunden."
     }
   },
