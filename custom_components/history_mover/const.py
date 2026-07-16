@@ -15,6 +15,9 @@ ATTR_RENAMES: Final = "renames"
 ATTR_ON_CONFLICT: Final = "on_conflict"
 ATTR_DRY_RUN: Final = "dry_run"
 ATTR_SCAN_REFERENCES: Final = "scan_references"
+# Flow-only field names (the bulk prefix step).
+ATTR_OLD_PREFIX: Final = "old_prefix"
+ATTR_NEW_PREFIX: Final = "new_prefix"
 
 # What to do when the target id already holds history of the same kind (states
 # or statistics) that the source is about to move onto it.

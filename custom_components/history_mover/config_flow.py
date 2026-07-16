@@ -31,7 +31,9 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     ATTR_NEW_ENTITY_ID,
+    ATTR_NEW_PREFIX,
     ATTR_OLD_ENTITY_ID,
+    ATTR_OLD_PREFIX,
     ATTR_ON_CONFLICT,
     CONFLICT_MODES,
     DEFAULT_ON_CONFLICT,
@@ -39,9 +41,6 @@ from .const import (
 )
 from .mover import RenameRequest, async_list_history_ids
 from .services import async_perform_rename
-
-ATTR_OLD_PREFIX = "old_prefix"
-ATTR_NEW_PREFIX = "new_prefix"
 
 _LOGGER = logging.getLogger(__name__)
 

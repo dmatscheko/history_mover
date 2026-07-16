@@ -136,7 +136,7 @@ Statuses are updated as fixes land; each fix is its own commit.
   [config_flow.py](custom_components/history_mover/config_flow.py); every other
   service/flow field name lives in [const.py](custom_components/history_mover/const.py).
 - **Alignment:** move both to `const.py`.
-- **Status:** open — planned fix: `move prefix field names to const`
+- **Status:** aligned — both live in `const.py`, marked as flow-only.
 
 ### C3 — two shapes for "count rows for a metadata id"
 
