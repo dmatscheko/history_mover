@@ -8,6 +8,7 @@ see a dry-run preview of exactly what moves and what gets discarded, then apply.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -18,6 +19,7 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.core import callback, valid_entity_id
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.selector import (
     SelectSelector,
@@ -39,6 +41,8 @@ from .services import async_perform_rename
 
 ATTR_OLD_PREFIX = "old_prefix"
 ATTR_NEW_PREFIX = "new_prefix"
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _conflict_selector() -> SelectSelector:
@@ -91,6 +95,7 @@ class HistoryMoverOptionsFlow(OptionsFlow):
     def __init__(self) -> None:
         self._pairs: list[RenameRequest] = []
         self._on_conflict: str = DEFAULT_ON_CONFLICT
+        self._summary: str | None = None
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -180,26 +185,39 @@ class HistoryMoverOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Show a dry-run preview, then apply on submit."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            await async_perform_rename(
+            try:
+                await async_perform_rename(
+                    self.hass,
+                    self._pairs,
+                    on_conflict=self._on_conflict,
+                    dry_run=False,
+                    scan_references=True,
+                )
+            except HomeAssistantError:
+                # Keep the flow (and the user's input) alive with a real error
+                # instead of the generic unknown-error toast.
+                _LOGGER.exception("Applying the move from the guided flow failed")
+                errors["base"] = "apply_failed"
+            else:
+                return self.async_create_entry(title="", data={})
+        if self._summary is None:
+            # Computed once; on an apply error the cached preview is re-shown
+            # rather than re-queried from a recorder that just failed.
+            preview = await async_perform_rename(
                 self.hass,
                 self._pairs,
                 on_conflict=self._on_conflict,
-                dry_run=False,
-                scan_references=True,
+                dry_run=True,
+                scan_references=False,
             )
-            return self.async_create_entry(title="", data={})
-        preview = await async_perform_rename(
-            self.hass,
-            self._pairs,
-            on_conflict=self._on_conflict,
-            dry_run=True,
-            scan_references=False,
-        )
+            self._summary = _format_preview(preview)
         return self.async_show_form(
             step_id="confirm",
             data_schema=vol.Schema({}),
-            description_placeholders={"summary": _format_preview(preview)},
+            errors=errors,
+            description_placeholders={"summary": self._summary},
         )
 
 

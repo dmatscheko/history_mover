@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from homeassistant.components.recorder import Recorder
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.history_mover.const import DOMAIN
@@ -174,6 +177,46 @@ async def test_bulk_reports_no_matches(
     )
     assert result["step_id"] == "bulk"
     assert result["errors"] == {"base": "no_matches"}
+
+
+async def test_apply_failure_shows_form_error_and_allows_retry(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """An engine failure while applying keeps the flow (and the cached preview)
+    alive with an apply_failed error instead of the generic unknown-error toast."""
+    entry = await _setup_entry(hass)
+    preview = {"dry_run": True, "renames": []}
+    with patch(
+        "custom_components.history_mover.config_flow.async_perform_rename",
+        side_effect=[preview, HomeAssistantError("recorder timeout"), preview],
+    ) as perform:
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "single"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {
+                "old_entity_id": "sensor.af_old",
+                "new_entity_id": "sensor.af_new",
+                "on_conflict": "replace",
+            },
+        )
+        assert result["step_id"] == "confirm"  # call 1: the dry-run preview
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {}
+        )  # call 2: apply fails
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "confirm"
+        assert result["errors"] == {"base": "apply_failed"}
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {}
+        )  # call 3: retry succeeds
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+    # Exactly three engine calls: the preview was cached, not re-queried.
+    assert perform.call_count == 3
 
 
 async def _bulk_errors(

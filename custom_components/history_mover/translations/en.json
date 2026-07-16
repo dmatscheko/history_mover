@@ -58,7 +58,8 @@
       "empty_prefix": "Enter a source prefix, for example `sensor.solax_`.",
       "invalid_target": "This target prefix produces invalid ids — each result must be a lower-case `domain.object_id`.",
       "overlapping": "The renamed ids would overlap the ids being renamed (the target prefix must not extend the source prefix). Split this into separate operations.",
-      "no_matches": "No recorder history was found for that source prefix."
+      "no_matches": "No recorder history was found for that source prefix.",
+      "apply_failed": "Applying the move failed or timed out. Check the Home Assistant log ('Moved history' entries show what was applied) before submitting again."
     }
   },
   "services": {

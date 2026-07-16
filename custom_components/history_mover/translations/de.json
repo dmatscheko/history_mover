@@ -58,7 +58,8 @@
       "empty_prefix": "Gib ein Quell-Präfix ein, zum Beispiel `sensor.solax_`.",
       "invalid_target": "Dieses Ziel-Präfix erzeugt ungültige IDs — jedes Ergebnis muss eine kleingeschriebene `domain.object_id` sein.",
       "overlapping": "Die umbenannten IDs würden sich mit den umzubenennenden IDs überschneiden (das Ziel-Präfix darf das Quell-Präfix nicht erweitern). Teile dies in getrennte Vorgänge auf.",
-      "no_matches": "Für dieses Quell-Präfix wurde kein Recorder-Verlauf gefunden."
+      "no_matches": "Für dieses Quell-Präfix wurde kein Recorder-Verlauf gefunden.",
+      "apply_failed": "Das Anwenden des Verschiebens ist fehlgeschlagen oder hat das Zeitlimit überschritten. Prüfe das Home-Assistant-Log (Einträge „Moved history“ zeigen, was angewendet wurde), bevor du erneut absendest."
     }
   },
   "services": {

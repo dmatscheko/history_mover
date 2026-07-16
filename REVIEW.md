@@ -96,7 +96,8 @@ Statuses are updated as fixes land; each fix is its own commit.
   toast and loses the flow state.
 - **Fix:** catch `HomeAssistantError` on apply and re-show the confirm form with an
   `apply_failed` error.
-- **Status:** open — planned fix: `show a form error when applying from the flow fails`
+- **Status:** fixed — apply errors re-show the confirm form (cached preview) with an
+  `apply_failed` error and log the exception; retrying works.
 
 ### B7 (low) — the confirm preview is unbounded
 
