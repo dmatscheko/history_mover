@@ -11,6 +11,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.history_mover.config_flow import _format_preview
 from custom_components.history_mover.const import DOMAIN
 
 from .common import count_states, record_states
@@ -177,6 +178,40 @@ async def test_bulk_reports_no_matches(
     )
     assert result["step_id"] == "bulk"
     assert result["errors"] == {"base": "no_matches"}
+
+
+def _preview_item(index: int, status: str) -> dict[str, object]:
+    return {
+        "old_entity_id": f"sensor.old_{index}",
+        "new_entity_id": f"sensor.new_{index}",
+        "status": status,
+        "moved_states": 2,
+        "moved_statistics": 1,
+        "discarded_states": 1 if status == "replaced" else 0,
+        "discarded_statistics": 0,
+    }
+
+
+def test_format_preview_caps_large_batches_and_adds_totals() -> None:
+    """The README advertises bulk moves of hundreds; the confirm dialog shows
+    totals plus the first pairs instead of an unbounded wall of lines."""
+    preview = {
+        "renames": [
+            _preview_item(i, "replaced" if i == 0 else "renamed") for i in range(20)
+        ]
+    }
+    text = _format_preview(preview)
+    assert "**20 pairs** (19 renamed, 1 replaced)" in text
+    assert "move 40 states / 20 statistics; discard 1 / 0" in text
+    assert "… and 5 more pairs" in text
+    assert "sensor.old_14" in text  # the 15th listed pair
+    assert "sensor.old_15" not in text  # capped after that
+
+
+def test_format_preview_single_pair_stays_plain() -> None:
+    text = _format_preview({"renames": [_preview_item(0, "renamed")]})
+    assert "pairs" not in text  # no totals header, no cap line
+    assert "`sensor.old_0` → `sensor.new_0`" in text
 
 
 async def test_apply_failure_shows_form_error_and_allows_retry(

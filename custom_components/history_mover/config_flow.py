@@ -9,6 +9,7 @@ see a dry-run preview of exactly what moves and what gets discarded, then apply.
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from typing import Any
 
 import voluptuous as vol
@@ -221,12 +222,37 @@ class HistoryMoverOptionsFlow(OptionsFlow):
         )
 
 
+# The confirm dialog lists at most this many pairs; a bulk move of hundreds
+# gets totals plus a "… and N more" line instead of an unreadable wall.
+_PREVIEW_MAX_PAIRS = 15
+
+
 def _format_preview(preview: dict[str, Any]) -> str:
-    """A one-line-per-pair markdown summary for the confirm screen."""
-    return "\n".join(
+    """A markdown summary for the confirm screen: totals for multi-pair
+    batches, then one line per pair, capped at ``_PREVIEW_MAX_PAIRS``."""
+    renames: list[dict[str, Any]] = preview["renames"]
+    lines = [
         f"- `{item['old_entity_id']}` → `{item['new_entity_id']}`: "
         f"**{item['status']}** (move {item['moved_states']} states / "
         f"{item['moved_statistics']} statistics; discard {item['discarded_states']} / "
         f"{item['discarded_statistics']})"
-        for item in preview["renames"]
-    )
+        for item in renames[:_PREVIEW_MAX_PAIRS]
+    ]
+    if len(renames) > _PREVIEW_MAX_PAIRS:
+        lines.append(f"- … and {len(renames) - _PREVIEW_MAX_PAIRS} more pairs")
+    if len(renames) > 1:
+        statuses = ", ".join(
+            f"{count} {status}"
+            for status, count in Counter(
+                item["status"] for item in renames
+            ).most_common()
+        )
+        lines.insert(
+            0,
+            f"**{len(renames)} pairs** ({statuses}) — move "
+            f"{sum(i['moved_states'] for i in renames)} states / "
+            f"{sum(i['moved_statistics'] for i in renames)} statistics; discard "
+            f"{sum(i['discarded_states'] for i in renames)} / "
+            f"{sum(i['discarded_statistics'] for i in renames)}\n",
+        )
+    return "\n".join(lines)

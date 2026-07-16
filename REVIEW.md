@@ -107,7 +107,8 @@ Statuses are updated as fixes land; each fix is its own commit.
   confirm dialog then renders hundreds of markdown lines.
 - **Fix:** a totals line for multi-pair batches and a cap on listed pairs
   ("… and N more").
-- **Status:** open — planned fix: `cap the confirm preview and add batch totals`
+- **Status:** fixed — multi-pair batches get a totals/status header; listing caps at
+  15 pairs with "… and N more".
 
 ## Equivalent concepts expressed inconsistently
 
