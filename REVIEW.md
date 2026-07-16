@@ -146,7 +146,8 @@ Statuses are updated as fixes land; each fix is its own commit.
   statistics models.
 - **Alignment:** one `_count_rows(session, model, metadata_id)` primitive; the
   statistics variant sums it over `Statistics` + `StatisticsShortTerm`.
-- **Status:** open — planned fix: `unify row counting on one helper`
+- **Status:** aligned — `_count_rows(session, model, metadata_id)` is the one
+  primitive; `_count_statistics` sums it over both statistics models.
 
 ### C4 — hand-written dataclass→dict serialisation
 

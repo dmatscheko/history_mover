@@ -356,8 +356,8 @@ def _process_pair(
         )
 
     # Counts first — before any row is moved or deleted.
-    moved_states = _count(session, States, src_meta.metadata_id) if src_meta else 0
-    discarded_states = _count(session, States, dst_meta.metadata_id) if states_collision and dst_meta else 0
+    moved_states = _count_rows(session, States, src_meta.metadata_id) if src_meta else 0
+    discarded_states = _count_rows(session, States, dst_meta.metadata_id) if states_collision and dst_meta else 0
     moved_stats = _count_statistics(session, src_stat.id) if src_stat else 0
     discarded_stats = _count_statistics(session, dst_stat.id) if stats_collision and dst_stat else 0
 
@@ -410,7 +410,11 @@ def _statistics_meta(session: Session, statistic_id: str) -> StatisticsMeta | No
     )
 
 
-def _count(session: Session, model: type[States], metadata_id: int) -> int:
+def _count_rows(
+    session: Session,
+    model: type[States | Statistics | StatisticsShortTerm],
+    metadata_id: int,
+) -> int:
     result = (
         session.query(func.count())
         .select_from(model)
@@ -421,16 +425,10 @@ def _count(session: Session, model: type[States], metadata_id: int) -> int:
 
 
 def _count_statistics(session: Session, metadata_id: int) -> int:
-    total = 0
-    for model in (Statistics, StatisticsShortTerm):
-        result = (
-            session.query(func.count())
-            .select_from(model)
-            .filter(model.metadata_id == metadata_id)
-            .scalar()
-        )
-        total += int(result or 0)
-    return total
+    return sum(
+        _count_rows(session, model, metadata_id)
+        for model in (Statistics, StatisticsShortTerm)
+    )
 
 
 def _relabel_states(session: Session, metadata_id: int, new_entity_id: str) -> None:
