@@ -77,7 +77,7 @@
         },
         "renames": {
           "name": "Renames (bulk)",
-          "description": "A list of {old_entity_id, new_entity_id} pairs, to move many at once instead of a single pair."
+          "description": "A list of pairs, each with old_entity_id and new_entity_id, to move many at once instead of a single pair."
         },
         "on_conflict": {
           "name": "On conflict",

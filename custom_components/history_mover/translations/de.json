@@ -77,7 +77,7 @@
         },
         "renames": {
           "name": "Umbenennungen (mehrere)",
-          "description": "Eine Liste von {old_entity_id, new_entity_id}-Paaren, um viele auf einmal statt eines einzelnen Paares zu verschieben."
+          "description": "Eine Liste von Paaren, jeweils mit old_entity_id und new_entity_id, um viele auf einmal statt eines einzelnen Paares zu verschieben."
         },
         "on_conflict": {
           "name": "Bei Konflikt",

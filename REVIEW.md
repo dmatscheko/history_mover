@@ -110,6 +110,21 @@ Statuses are updated as fixes land; each fix is its own commit.
 - **Status:** fixed — multi-pair batches get a totals/status header; listing caps at
   15 pairs with "… and N more".
 
+### B8 (low) — literal braces in a translation string break hassfest
+
+- **Where:** the `renames` field description in
+  [strings.json](custom_components/history_mover/strings.json),
+  [translations/en.json](custom_components/history_mover/translations/en.json) and
+  [translations/de.json](custom_components/history_mover/translations/de.json).
+- **What:** translation strings parse every `{…}` as a placeholder, and placeholders
+  must be valid identifiers. "A list of `{old_entity_id, new_entity_id}` pairs …"
+  therefore fails hassfest (reported by CI after the initial review pass; the text
+  predates the review). The only intended placeholder, `{summary}`, is valid.
+- **Fix:** reworded the description without literal braces in all three files; a
+  sweep of every string value against hassfest's identifier rule found no other
+  violation.
+- **Status:** fixed — `reword the renames description; braces are parsed as placeholders`
+
 ## Equivalent concepts expressed inconsistently
 
 ### C1 — request validation exists in three divergent shapes
