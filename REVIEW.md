@@ -166,7 +166,8 @@ Statuses are updated as fixes land; each fix is its own commit.
   standalone "Sammel" ("Sammel (nach Präfix)", "Verlauf verschieben — Sammel",
   "Umbenennungen (Sammel)") — "Sammel-" only exists as a bound prefix in German.
 - **Alignment:** "Mehrere (nach Präfix)" / "— mehrere" / "Umbenennungen (mehrere)".
-- **Status:** open — planned fix: `use standard german wording for the bulk option`
+- **Status:** aligned — "Mehrere (nach Präfix)" / "— mehrere" / "Umbenennungen
+  (mehrere)".
 
 ## Considered and deliberately kept
 

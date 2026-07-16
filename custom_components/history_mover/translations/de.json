@@ -16,7 +16,7 @@
         "title": "Verlauf verschieben",
         "menu_options": {
           "single": "Einzelne Entität",
-          "bulk": "Sammel (nach Präfix)"
+          "bulk": "Mehrere (nach Präfix)"
         }
       },
       "single": {
@@ -34,7 +34,7 @@
         }
       },
       "bulk": {
-        "title": "Verlauf verschieben — Sammel",
+        "title": "Verlauf verschieben — mehrere",
         "description": "Jeden Recorder-Verlauf, dessen ID mit dem Quell-Präfix beginnt, auf dieselbe ID mit dem Ziel-Präfix verschieben. IDs, die nicht mehr in der Registrierung stehen, sind eingeschlossen. Für beliebige Zuordnungen die Aktion `history_mover.rename` mit einer Liste verwenden.",
         "data": {
           "old_prefix": "Quell-Präfix",
@@ -76,7 +76,7 @@
           "description": "Die ID, die den Verlauf ab jetzt besitzen soll. Ihr eigener vorhandener Verlauf derselben Art wird verworfen (siehe „Bei Konflikt“)."
         },
         "renames": {
-          "name": "Umbenennungen (Sammel)",
+          "name": "Umbenennungen (mehrere)",
           "description": "Eine Liste von {old_entity_id, new_entity_id}-Paaren, um viele auf einmal statt eines einzelnen Paares zu verschieben."
         },
         "on_conflict": {
