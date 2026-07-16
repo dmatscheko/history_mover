@@ -73,7 +73,7 @@ Statuses are updated as fixes land; each fix is its own commit.
   `hass.async_add_executor_job`. On a foreign thread the recorder's `RecorderPool`
   falls back to NullPool behaviour and opens a fresh database connection per call.
   HA core routes recorder reads through `get_instance(hass).async_add_executor_job`.
-- **Status:** open — planned fix: `run history id listing on the recorder executor`
+- **Status:** fixed — listing runs via `get_instance(hass).async_add_executor_job`.
 
 ### B5 (low) — README promises "Every action is logged"; the engine logs nothing on success
 

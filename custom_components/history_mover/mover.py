@@ -114,9 +114,12 @@ async def async_list_history_ids(hass: HomeAssistant, prefix: str) -> list[str]:
     """Recorder ids (states and entity statistics) that start with ``prefix``.
 
     Includes ids no longer in the entity registry — the orphaned histories that
-    bulk migration most often targets. Runs in the recorder's executor.
+    bulk migration most often targets. Runs in the recorder's executor (like HA
+    core's own history reads), where the connection pool reuses connections.
     """
-    return await hass.async_add_executor_job(_list_history_ids, hass, prefix)
+    return await get_instance(hass).async_add_executor_job(
+        _list_history_ids, hass, prefix
+    )
 
 
 def _list_history_ids(hass: HomeAssistant, prefix: str) -> list[str]:
