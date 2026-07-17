@@ -12,6 +12,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.history_mover.const import (
     DOMAIN,
+    SERVICE_DELETE,
     SERVICE_PURGE_ORPHANS,
     SERVICE_RENAME,
 )
@@ -31,6 +32,7 @@ async def _setup(hass: HomeAssistant) -> None:
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     assert hass.services.has_service(DOMAIN, SERVICE_RENAME)
+    assert hass.services.has_service(DOMAIN, SERVICE_DELETE)
     assert hass.services.has_service(DOMAIN, SERVICE_PURGE_ORPHANS)
 
 
@@ -162,6 +164,56 @@ async def test_reference_scan_reports_and_notifies(
     assert "sensor.old" in response["references"]
     assert response["references"]["sensor.old"][0]["source"] == "automations.yaml"
     assert notify.called
+
+
+async def test_delete_service_end_to_end(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """Preview with dry_run (typos reported), then apply — via the service."""
+    await _setup(hass)
+    await record_states(hass, "sensor.svcdel_gone", ["1"])
+    await remove_entity(hass, "sensor.svcdel_gone")
+    await record_states(hass, "sensor.svcdel_keep", ["1"])
+
+    preview = await hass.services.async_call(
+        DOMAIN,
+        SERVICE_DELETE,
+        {"entity_ids": ["sensor.svcdel_gone", "sensor.svcdel_typo"], "dry_run": True},
+        blocking=True,
+        return_response=True,
+    )
+    assert preview["deletions"] == [
+        {
+            "entity_id": "sensor.svcdel_gone",
+            "applied": False,
+            "deleted_states": 2,
+            "deleted_statistics": 0,
+        }
+    ]
+    assert preview["not_found_entity_ids"] == ["sensor.svcdel_typo"]
+    assert preview["not_found_domains"] == []
+    assert await count_states(hass, "sensor.svcdel_gone") == 2  # untouched
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        SERVICE_DELETE,
+        {"entity_ids": ["sensor.svcdel_gone"]},
+        blocking=True,
+        return_response=True,
+    )
+    assert response["deletions"][0]["applied"] is True
+    assert await count_states(hass, "sensor.svcdel_gone") is None
+    assert await count_states(hass, "sensor.svcdel_keep") == 1
+
+
+async def test_delete_service_rejects_empty_selection(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    await _setup(hass)
+    with pytest.raises(ServiceValidationError, match="at least one"):
+        await hass.services.async_call(
+            DOMAIN, SERVICE_DELETE, {}, blocking=True, return_response=True
+        )
 
 
 async def test_purge_orphans_service_end_to_end(

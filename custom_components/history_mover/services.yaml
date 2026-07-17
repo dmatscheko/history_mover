@@ -40,6 +40,33 @@ rename:
       default: true
       selector:
         boolean:
+delete:
+  fields:
+    entity_ids:
+      required: false
+      example: |
+        - sensor.old_pv_power
+        - sensor.retired_meter
+      selector:
+        text:
+          multiple: true
+    domains:
+      required: false
+      example: |
+        - camera
+      selector:
+        text:
+          multiple: true
+    dry_run:
+      required: false
+      default: false
+      selector:
+        boolean:
+    repack:
+      required: false
+      default: false
+      selector:
+        boolean:
 purge_orphans:
   fields:
     dry_run:

@@ -17,6 +17,7 @@
         "menu_options": {
           "single": "Single entity",
           "bulk": "Bulk (by prefix)",
+          "delete": "Delete history (by entity or domain)",
           "purge": "Purge orphaned history"
         }
       },
@@ -52,6 +53,24 @@
         "title": "Confirm",
         "description": "This changes the recorder database and cannot be undone. Review, then submit to apply.\n\n{summary}"
       },
+      "delete": {
+        "title": "Delete history",
+        "description": "Deletes the complete recorder history (states and long-term statistics) of the selected entities and/or every entity of the selected domains — including ids that no longer exist. Live entities keep their current state and simply start a fresh history. You will see a preview before anything is deleted.",
+        "data": {
+          "entity_ids": "Entity IDs",
+          "domains": "Domains",
+          "repack": "Repack the database afterwards"
+        },
+        "data_description": {
+          "entity_ids": "Exact ids, one per entry, for example `sensor.old_pv_power` — also ids that no longer exist in Home Assistant. Matched exactly as stored in the recorder.",
+          "domains": "Whole domains, for example `camera` — deletes the history of every entity of that domain.",
+          "repack": "Tries to reclaim the freed disk space by rewriting the entire database file (the same repack as the `recorder.purge` action). Can take a while on a large database."
+        }
+      },
+      "delete_confirm": {
+        "title": "Confirm",
+        "description": "This deletes the listed histories from the recorder database and cannot be undone. Only the listed ids are deleted — nothing that appears after this preview. Review, then submit to apply.\n\n{summary}"
+      },
       "purge": {
         "title": "Purge orphaned history",
         "description": "Finds every recorder history that no existing entity writes into anymore — the id has no current state and no entity registry entry — and deletes its states and statistics. These are typically left over from removed integrations and deleted entities. Disabled entities and external statistics are never touched. You will see a preview before anything is deleted.",
@@ -76,7 +95,11 @@
       "no_matches": "No recorder history was found for that source prefix.",
       "apply_failed": "Applying the move failed or timed out. Check the Home Assistant log ('Moved history' entries show what was applied) before submitting again.",
       "no_orphans": "No orphaned history found — every recorder entry belongs to an existing entity.",
-      "purge_failed": "Applying the purge failed or timed out. Check the Home Assistant log ('Purged orphaned history' entries show what was deleted) before submitting again."
+      "purge_failed": "Applying the purge failed or timed out. Check the Home Assistant log ('Purged orphaned history' entries show what was deleted) before submitting again.",
+      "empty_selection": "Enter at least one entity ID or domain.",
+      "invalid_domain": "Enter plain domains like `sensor` — specific ids belong in the entity IDs field.",
+      "no_delete_matches": "No recorder history matches this selection. IDs are matched exactly as stored — check for typos.",
+      "delete_failed": "Applying the delete failed or timed out. Check the Home Assistant log ('Deleted history' entries show what was deleted) before submitting again."
     }
   },
   "services": {
@@ -107,6 +130,28 @@
         "scan_references": {
           "name": "Scan references",
           "description": "After moving, report configuration files that still mention the old id (automations, scripts, scenes, dashboards, UI helpers). Nothing is edited."
+        }
+      }
+    },
+    "delete": {
+      "name": "Delete history",
+      "description": "Deletes the complete recorder history (states and long-term statistics) of the given entity ids and/or every entity of the given domains — including ids that no longer exist in Home Assistant. Live entities keep their current state and start a fresh history. External statistics (ids with a colon) are never touched. Returns the deleted ids with row counts plus any selection parts that matched nothing; call with 'Return response' and Dry run first to preview.",
+      "fields": {
+        "entity_ids": {
+          "name": "Entity IDs",
+          "description": "A list of exact ids, for example `sensor.old_pv_power` — also ids that no longer exist. Matched exactly as stored in the recorder."
+        },
+        "domains": {
+          "name": "Domains",
+          "description": "A list of whole domains, for example `camera` — deletes the history of every entity of that domain."
+        },
+        "dry_run": {
+          "name": "Dry run",
+          "description": "Only report which histories would be deleted (with row counts). Nothing is changed. Call with 'Return response' to see the preview."
+        },
+        "repack": {
+          "name": "Repack",
+          "description": "After deleting, try to reclaim the freed disk space by rewriting the entire database file (the same repack as the `recorder.purge` action). Can take a while on a large database."
         }
       }
     },

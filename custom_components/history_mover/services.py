@@ -1,11 +1,12 @@
-"""The ``history_mover.rename`` and ``history_mover.purge_orphans`` admin services.
+"""The ``rename``, ``delete`` and ``purge_orphans`` admin services.
 
 A ``rename`` call carries one pair (``old_entity_id`` + ``new_entity_id``) or
-many (``renames``); ``purge_orphans`` takes no ids at all — it finds every
-history no existing entity writes into anymore. Both are admin-only and return
-response data — a per-id report and, for a dry run, a preview — so they are
-equally usable from Developer Tools, scripts, and the guided UI (which calls
-the same engines).
+many (``renames``); ``delete`` removes the history of named entity ids and/or
+whole domains; ``purge_orphans`` takes no ids at all — it finds every history
+no existing entity writes into anymore. All are admin-only and return response
+data — a per-id report and, for a dry run, a preview — so they are equally
+usable from Developer Tools, scripts, and the guided UI (which calls the same
+engines).
 """
 
 from __future__ import annotations
@@ -26,7 +27,9 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.service import async_register_admin_service
 
 from .const import (
+    ATTR_DOMAINS,
     ATTR_DRY_RUN,
+    ATTR_ENTITY_IDS,
     ATTR_NEW_ENTITY_ID,
     ATTR_OLD_ENTITY_ID,
     ATTR_ON_CONFLICT,
@@ -36,13 +39,14 @@ from .const import (
     CONFLICT_MODES,
     DEFAULT_ON_CONFLICT,
     DOMAIN,
+    SERVICE_DELETE,
     SERVICE_PURGE_ORPHANS,
     SERVICE_RENAME,
     STATUS_RENAMED,
     STATUS_REPLACED,
 )
 from .mover import RenameRequest, async_move_history
-from .purger import async_purge_orphans
+from .purger import async_delete_history, async_purge_orphans
 from .references import ReferenceHit, async_scan_references
 
 if TYPE_CHECKING:
@@ -75,10 +79,21 @@ _PURGE_SCHEMA = vol.Schema(
     }
 )
 
+_DELETE_SCHEMA = vol.Schema(
+    {
+        # Plain strings on purpose: ids are matched exactly as stored, so junk
+        # ids a validator would reject stay addressable (see purger).
+        vol.Optional(ATTR_ENTITY_IDS, default=list): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional(ATTR_DOMAINS, default=list): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional(ATTR_DRY_RUN, default=False): cv.boolean,
+        vol.Optional(ATTR_REPACK, default=False): cv.boolean,
+    }
+)
+
 
 @callback
 def async_setup_services(hass: HomeAssistant) -> None:
-    """Register both admin services once (they only ever register together)."""
+    """Register the admin services once (they only ever register together)."""
     if hass.services.has_service(DOMAIN, SERVICE_RENAME):
         return
 
@@ -89,6 +104,15 @@ def async_setup_services(hass: HomeAssistant) -> None:
             on_conflict=call.data[ATTR_ON_CONFLICT],
             dry_run=call.data[ATTR_DRY_RUN],
             scan_references=call.data[ATTR_SCAN_REFERENCES],
+        )
+
+    async def _handle_delete(call: ServiceCall) -> ServiceResponse:
+        return await async_perform_delete(
+            hass,
+            entity_ids=call.data[ATTR_ENTITY_IDS],
+            domains=call.data[ATTR_DOMAINS],
+            dry_run=call.data[ATTR_DRY_RUN],
+            repack=call.data[ATTR_REPACK],
         )
 
     async def _handle_purge(call: ServiceCall) -> ServiceResponse:
@@ -104,6 +128,14 @@ def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_RENAME,
         _handle_rename,
         schema=_RENAME_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    async_register_admin_service(
+        hass,
+        DOMAIN,
+        SERVICE_DELETE,
+        _handle_delete,
+        schema=_DELETE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
     async_register_admin_service(
@@ -172,6 +204,38 @@ async def async_perform_purge(
         "dry_run": dry_run,
         "repack": repack,
         "orphans": [outcome.as_dict() for outcome in outcomes],
+    }
+
+
+async def async_perform_delete(
+    hass: HomeAssistant,
+    *,
+    entity_ids: list[str],
+    domains: list[str],
+    dry_run: bool,
+    repack: bool,
+    restrict_to: set[str] | None = None,
+) -> dict[str, Any]:
+    """Delete the selected histories and shape the report into a response.
+
+    Shared by the service and the guided UI (``restrict_to`` as in
+    ``async_perform_purge``). The not-found lists surface typos: selection
+    parts that matched nothing in the recorder.
+    """
+    report = await async_delete_history(
+        hass,
+        entity_ids=entity_ids,
+        domains=domains,
+        dry_run=dry_run,
+        repack=repack,
+        restrict_to=restrict_to,
+    )
+    return {
+        "dry_run": dry_run,
+        "repack": repack,
+        "deletions": [outcome.as_dict() for outcome in report.outcomes],
+        "not_found_entity_ids": report.not_found_entity_ids,
+        "not_found_domains": report.not_found_domains,
     }
 
 

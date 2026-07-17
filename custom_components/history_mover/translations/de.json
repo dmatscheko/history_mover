@@ -17,6 +17,7 @@
         "menu_options": {
           "single": "Einzelne Entität",
           "bulk": "Mehrere (nach Präfix)",
+          "delete": "Verlauf löschen (nach Entität oder Domain)",
           "purge": "Verwaiste Verläufe bereinigen"
         }
       },
@@ -52,6 +53,24 @@
         "title": "Bestätigen",
         "description": "Dies ändert die Recorder-Datenbank und kann nicht rückgängig gemacht werden. Prüfen und dann zum Anwenden absenden.\n\n{summary}"
       },
+      "delete": {
+        "title": "Verlauf löschen",
+        "description": "Löscht den vollständigen Recorder-Verlauf (Zustände und Langzeitstatistik) der ausgewählten Entitäten und/oder jeder Entität der ausgewählten Domains — auch von IDs, die es nicht mehr gibt. Vorhandene Entitäten behalten ihren aktuellen Zustand und beginnen einfach einen frischen Verlauf. Vor dem Löschen wird eine Vorschau angezeigt.",
+        "data": {
+          "entity_ids": "Entitäts-IDs",
+          "domains": "Domains",
+          "repack": "Datenbank anschließend umpacken"
+        },
+        "data_description": {
+          "entity_ids": "Exakte IDs, eine pro Eintrag, zum Beispiel `sensor.old_pv_power` — auch IDs, die es in Home Assistant nicht mehr gibt. Es wird exakt so verglichen, wie die ID im Recorder steht.",
+          "domains": "Ganze Domains, zum Beispiel `camera` — löscht den Verlauf jeder Entität dieser Domain.",
+          "repack": "Versucht, den freigewordenen Speicherplatz zurückzugewinnen, indem die gesamte Datenbankdatei neu geschrieben wird (dasselbe Umpacken wie bei der Aktion `recorder.purge`). Kann bei einer großen Datenbank eine Weile dauern."
+        }
+      },
+      "delete_confirm": {
+        "title": "Bestätigen",
+        "description": "Dies löscht die aufgeführten Verläufe aus der Recorder-Datenbank und kann nicht rückgängig gemacht werden. Es werden nur die aufgeführten IDs gelöscht — nichts, was nach dieser Vorschau hinzukommt. Prüfen und dann zum Anwenden absenden.\n\n{summary}"
+      },
       "purge": {
         "title": "Verwaiste Verläufe bereinigen",
         "description": "Findet jeden Recorder-Verlauf, in den keine vorhandene Entität mehr schreibt — die ID hat keinen aktuellen Zustand und keinen Eintrag in der Entitätsregistrierung — und löscht dessen Zustände und Statistiken. Solche Verläufe bleiben typischerweise von entfernten Integrationen und gelöschten Entitäten zurück. Deaktivierte Entitäten und externe Statistiken werden nie angetastet. Vor dem Löschen wird eine Vorschau angezeigt.",
@@ -76,7 +95,11 @@
       "no_matches": "Für dieses Quell-Präfix wurde kein Recorder-Verlauf gefunden.",
       "apply_failed": "Das Anwenden des Verschiebens ist fehlgeschlagen oder hat das Zeitlimit überschritten. Prüfe das Home-Assistant-Log (Einträge „Moved history“ zeigen, was angewendet wurde), bevor du erneut absendest.",
       "no_orphans": "Keine verwaisten Verläufe gefunden — jeder Recorder-Eintrag gehört zu einer vorhandenen Entität.",
-      "purge_failed": "Das Anwenden der Bereinigung ist fehlgeschlagen oder hat das Zeitlimit überschritten. Prüfe das Home-Assistant-Log (Einträge „Purged orphaned history“ zeigen, was gelöscht wurde), bevor du erneut absendest."
+      "purge_failed": "Das Anwenden der Bereinigung ist fehlgeschlagen oder hat das Zeitlimit überschritten. Prüfe das Home-Assistant-Log (Einträge „Purged orphaned history“ zeigen, was gelöscht wurde), bevor du erneut absendest.",
+      "empty_selection": "Gib mindestens eine Entitäts-ID oder Domain ein.",
+      "invalid_domain": "Gib reine Domains wie `sensor` ein — einzelne IDs gehören ins Feld „Entitäts-IDs“.",
+      "no_delete_matches": "Kein Recorder-Verlauf passt zu dieser Auswahl. IDs werden exakt so verglichen, wie sie gespeichert sind — prüfe auf Tippfehler.",
+      "delete_failed": "Das Anwenden des Löschens ist fehlgeschlagen oder hat das Zeitlimit überschritten. Prüfe das Home-Assistant-Log (Einträge „Deleted history“ zeigen, was gelöscht wurde), bevor du erneut absendest."
     }
   },
   "services": {
@@ -107,6 +130,28 @@
         "scan_references": {
           "name": "Verweise suchen",
           "description": "Nach dem Verschieben Konfigurationsdateien melden, die die alte ID noch nennen (Automationen, Skripte, Szenen, Dashboards, UI-Helfer). Es wird nichts bearbeitet."
+        }
+      }
+    },
+    "delete": {
+      "name": "Verlauf löschen",
+      "description": "Löscht den vollständigen Recorder-Verlauf (Zustände und Langzeitstatistik) der angegebenen Entitäts-IDs und/oder jeder Entität der angegebenen Domains — auch von IDs, die es in Home Assistant nicht mehr gibt. Vorhandene Entitäten behalten ihren aktuellen Zustand und beginnen einen frischen Verlauf. Externe Statistiken (IDs mit Doppelpunkt) werden nie angetastet. Gibt die gelöschten IDs mit Zeilenanzahlen zurück sowie Auswahl-Teile ohne Treffer; zuerst mit „Antwort zurückgeben“ und Testlauf aufrufen, um die Vorschau zu sehen.",
+      "fields": {
+        "entity_ids": {
+          "name": "Entitäts-IDs",
+          "description": "Eine Liste exakter IDs, zum Beispiel `sensor.old_pv_power` — auch IDs, die es nicht mehr gibt. Es wird exakt so verglichen, wie die ID im Recorder steht."
+        },
+        "domains": {
+          "name": "Domains",
+          "description": "Eine Liste ganzer Domains, zum Beispiel `camera` — löscht den Verlauf jeder Entität dieser Domain."
+        },
+        "dry_run": {
+          "name": "Testlauf",
+          "description": "Nur melden, welche Verläufe gelöscht würden (mit Zeilenanzahlen). Es wird nichts geändert. Mit „Antwort zurückgeben“ aufrufen, um die Vorschau zu sehen."
+        },
+        "repack": {
+          "name": "Umpacken",
+          "description": "Nach dem Löschen versuchen, den freigewordenen Speicherplatz zurückzugewinnen, indem die gesamte Datenbankdatei neu geschrieben wird (dasselbe Umpacken wie bei der Aktion `recorder.purge`). Kann bei einer großen Datenbank eine Weile dauern."
         }
       }
     },

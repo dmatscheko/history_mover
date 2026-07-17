@@ -4,10 +4,12 @@ from typing import Final
 
 DOMAIN: Final = "history_mover"
 
-# The two admin services: `rename` moves recorder history from one entity id
-# onto another (one call carries one or many pairs); `purge_orphans` deletes
-# every history no existing entity writes into anymore.
+# The three admin services: `rename` moves recorder history from one entity id
+# onto another (one call carries one or many pairs); `delete` removes the
+# history of explicitly named entity ids and/or whole domains; `purge_orphans`
+# deletes every history no existing entity writes into anymore.
 SERVICE_RENAME: Final = "rename"
+SERVICE_DELETE: Final = "delete"
 SERVICE_PURGE_ORPHANS: Final = "purge_orphans"
 
 # Service / flow field names.
@@ -18,6 +20,8 @@ ATTR_ON_CONFLICT: Final = "on_conflict"
 ATTR_DRY_RUN: Final = "dry_run"
 ATTR_SCAN_REFERENCES: Final = "scan_references"
 ATTR_REPACK: Final = "repack"
+ATTR_ENTITY_IDS: Final = "entity_ids"
+ATTR_DOMAINS: Final = "domains"
 # Flow-only field names (the bulk prefix step).
 ATTR_OLD_PREFIX: Final = "old_prefix"
 ATTR_NEW_PREFIX: Final = "new_prefix"

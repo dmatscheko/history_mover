@@ -12,6 +12,7 @@ from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.history_mover.config_flow import (
+    _format_delete_preview,
     _format_preview,
     _format_purge_preview,
 )
@@ -412,6 +413,137 @@ async def test_purge_apply_failure_shows_form_error_and_allows_retry(
         assert call.kwargs["restrict_to"] == {"sensor.pf_gone"}
 
 
+async def test_delete_via_options(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """The full guided delete: menu → selection → preview (with not-found
+    warnings) → apply."""
+    entry = await _setup_entry(hass)
+    await record_states(hass, "sensor.optdel_gone", ["1", "2"])
+    await remove_entity(hass, "sensor.optdel_gone")
+    await record_states(hass, "sensor.optdel_keep", ["1"])
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "delete"}
+    )
+    assert result["step_id"] == "delete"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "entity_ids": ["sensor.optdel_gone"],
+            "domains": ["camera"],  # nothing recorded there — warned, not fatal
+            "repack": False,
+        },
+    )
+    assert result["step_id"] == "delete_confirm"
+    summary = result["description_placeholders"]["summary"]
+    assert "sensor.optdel_gone" in summary
+    assert "3 states" in summary  # 2 values + the recorded removal
+    assert "No recorder history found in domain: `camera`" in summary
+    assert "sensor.optdel_keep" not in summary
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    assert await count_states(hass, "sensor.optdel_gone") is None
+    assert await count_states(hass, "sensor.optdel_keep") == 1
+
+
+async def _delete_form_errors(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    entity_ids: list[str],
+    domains: list[str],
+) -> dict[str, str]:
+    """Submit the delete form once and return its validation errors."""
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "delete"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"entity_ids": entity_ids, "domains": domains, "repack": False},
+    )
+    assert result["step_id"] == "delete"
+    errors: dict[str, str] = result["errors"]
+    return errors
+
+
+async def test_delete_flow_validation_errors(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """Empty selection, non-domain input and a selection matching nothing all
+    re-show the form with a specific error."""
+    entry = await _setup_entry(hass)
+    await record_states(hass, "sensor.optdel_present", ["1"])
+
+    assert await _delete_form_errors(hass, entry, [" "], []) == {
+        "base": "empty_selection"
+    }
+    assert await _delete_form_errors(hass, entry, [], ["sensor.foo"]) == {
+        "domains": "invalid_domain"
+    }
+    assert await _delete_form_errors(hass, entry, ["sensor.absent"], []) == {
+        "base": "no_delete_matches"
+    }
+
+
+async def test_delete_apply_failure_shows_form_error_and_allows_retry(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """An engine failure while applying keeps the flow (and the cached preview)
+    alive with a delete_failed error — the apply carries the same selection,
+    restricted to exactly the previewed ids."""
+    entry = await _setup_entry(hass)
+    preview = {
+        "dry_run": True,
+        "repack": True,
+        "deletions": [
+            {
+                "entity_id": "sensor.df_gone",
+                "applied": False,
+                "deleted_states": 1,
+                "deleted_statistics": 0,
+            }
+        ],
+        "not_found_entity_ids": [],
+        "not_found_domains": [],
+    }
+    with patch(
+        "custom_components.history_mover.config_flow.async_perform_delete",
+        side_effect=[preview, HomeAssistantError("recorder timeout"), preview],
+    ) as perform:
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "delete"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {"entity_ids": ["sensor.df_gone"], "domains": [], "repack": True},
+        )
+        assert result["step_id"] == "delete_confirm"  # call 1: the preview
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {}
+        )  # call 2: apply fails
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "delete_confirm"
+        assert result["errors"] == {"base": "delete_failed"}
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {}
+        )  # call 3: retry succeeds
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert perform.call_count == 3
+    for call in perform.call_args_list[1:]:
+        assert call.kwargs["entity_ids"] == ["sensor.df_gone"]
+        assert call.kwargs["dry_run"] is False
+        assert call.kwargs["repack"] is True
+        assert call.kwargs["restrict_to"] == {"sensor.df_gone"}
+
+
 def _purge_item(index: int) -> dict[str, object]:
     return {
         "entity_id": f"sensor.orph_{index}",
@@ -445,6 +577,40 @@ def test_format_purge_preview_single_orphan_without_repack() -> None:
     assert "**1 orphaned history**" in text
     assert "`sensor.orph_0`: 3 states / 2 statistics" in text
     assert "repacked" not in text
+
+
+def test_format_delete_preview_warns_about_not_found_parts() -> None:
+    text = _format_delete_preview(
+        {
+            "dry_run": True,
+            "repack": False,
+            "deletions": [_purge_item(0)],
+            "not_found_entity_ids": ["sensor.typo"],
+            "not_found_domains": ["sensro"],
+        }
+    )
+    assert "**1 history**" in text
+    assert "`sensor.orph_0`: 3 states / 2 statistics" in text
+    assert "No recorder history found for: `sensor.typo`" in text
+    assert "No recorder history found in domain: `sensro`" in text
+    assert "repacked" not in text
+
+
+def test_format_delete_preview_caps_and_repack_without_warnings() -> None:
+    text = _format_delete_preview(
+        {
+            "dry_run": True,
+            "repack": True,
+            "deletions": [_purge_item(i) for i in range(20)],
+            "not_found_entity_ids": [],
+            "not_found_domains": [],
+        }
+    )
+    assert "**20 histories**" in text
+    assert "delete 60 states / 40 statistics rows" in text
+    assert "… and 5 more" in text
+    assert "No recorder history found" not in text
+    assert "repacked" in text
 
 
 async def test_bulk_normalises_prefix_case(

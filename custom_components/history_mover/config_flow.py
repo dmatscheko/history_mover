@@ -29,9 +29,12 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
     TextSelector,
+    TextSelectorConfig,
 )
 
 from .const import (
+    ATTR_DOMAINS,
+    ATTR_ENTITY_IDS,
     ATTR_NEW_ENTITY_ID,
     ATTR_NEW_PREFIX,
     ATTR_OLD_ENTITY_ID,
@@ -43,7 +46,12 @@ from .const import (
     DOMAIN,
 )
 from .mover import RenameRequest, async_list_history_ids
-from .services import async_perform_purge, async_perform_rename
+from .purger import valid_delete_domain
+from .services import (
+    async_perform_delete,
+    async_perform_purge,
+    async_perform_rename,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -93,7 +101,8 @@ class HistoryMoverConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class HistoryMoverOptionsFlow(OptionsFlow):
-    """Pick a rename (single or bulk) or the orphan purge; preview, confirm, apply."""
+    """Pick a rename (single or bulk), a targeted delete, or the orphan purge;
+    preview, confirm, apply."""
 
     def __init__(self) -> None:
         self._pairs: list[RenameRequest] = []
@@ -101,12 +110,14 @@ class HistoryMoverOptionsFlow(OptionsFlow):
         self._summary: str | None = None
         self._repack: bool = False
         self._purge_ids: set[str] = set()
+        self._delete_selection: tuple[list[str], list[str]] = ([], [])
+        self._delete_ids: set[str] = set()
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         return self.async_show_menu(
-            step_id="init", menu_options=["single", "bulk", "purge"]
+            step_id="init", menu_options=["single", "bulk", "delete", "purge"]
         )
 
     async def async_step_single(
@@ -227,6 +238,87 @@ class HistoryMoverOptionsFlow(OptionsFlow):
             description_placeholders={"summary": self._summary},
         )
 
+    async def async_step_delete(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Pick entity ids and/or domains to delete, then preview (a dry run)."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            entity_ids = [v for v in user_input[ATTR_ENTITY_IDS] if v.strip()]
+            domains = [v for v in user_input[ATTR_DOMAINS] if v.strip()]
+            if not entity_ids and not domains:
+                errors["base"] = "empty_selection"
+            elif not all(valid_delete_domain(value) for value in domains):
+                errors[ATTR_DOMAINS] = "invalid_domain"
+            else:
+                preview = await async_perform_delete(
+                    self.hass,
+                    entity_ids=entity_ids,
+                    domains=domains,
+                    dry_run=True,
+                    repack=user_input[ATTR_REPACK],
+                )
+                if not preview["deletions"]:
+                    errors["base"] = "no_delete_matches"
+                else:
+                    self._delete_selection = (entity_ids, domains)
+                    self._repack = user_input[ATTR_REPACK]
+                    self._delete_ids = {
+                        item["entity_id"] for item in preview["deletions"]
+                    }
+                    self._summary = _format_delete_preview(preview)
+                    return await self.async_step_delete_confirm()
+        return self.async_show_form(
+            step_id="delete",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(ATTR_ENTITY_IDS, default=[]): TextSelector(
+                        TextSelectorConfig(multiple=True)
+                    ),
+                    vol.Optional(ATTR_DOMAINS, default=[]): TextSelector(
+                        TextSelectorConfig(multiple=True)
+                    ),
+                    vol.Required(ATTR_REPACK, default=False): BooleanSelector(),
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_delete_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show the delete preview, then apply on submit.
+
+        The apply re-matches the same selection but is restricted to the
+        previewed ids — nothing that appeared since the preview is deleted.
+        """
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            entity_ids, domains = self._delete_selection
+            try:
+                await async_perform_delete(
+                    self.hass,
+                    entity_ids=entity_ids,
+                    domains=domains,
+                    dry_run=False,
+                    repack=self._repack,
+                    restrict_to=self._delete_ids,
+                )
+            except HomeAssistantError:
+                # Keep the flow (and the cached preview) alive with a real
+                # error instead of the generic unknown-error toast.
+                _LOGGER.exception("Applying the delete from the guided flow failed")
+                errors["base"] = "delete_failed"
+            else:
+                return self.async_create_entry(title="", data={})
+        return self.async_show_form(
+            step_id="delete_confirm",
+            data_schema=vol.Schema({}),
+            errors=errors,
+            # Always set by async_step_delete before this step is reachable.
+            description_placeholders={"summary": self._summary or ""},
+        )
+
     async def async_step_purge(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -322,26 +414,56 @@ def _format_preview(preview: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _format_purge_preview(preview: dict[str, Any]) -> str:
-    """A markdown summary for the purge confirm screen: totals, then one line
-    per orphan, capped at ``_PREVIEW_MAX_PAIRS``, plus the repack choice."""
-    orphans: list[dict[str, Any]] = preview["orphans"]
+_REPACK_NOTE = (
+    "\nThe database is repacked afterwards to reclaim the freed disk"
+    " space — this can take a while on a large database."
+)
+
+
+def _deletion_lines(
+    items: list[dict[str, Any]], noun_one: str, noun_many: str
+) -> list[str]:
+    """Totals, then one line per id, capped at ``_PREVIEW_MAX_PAIRS`` — the
+    shared body of the delete and purge confirm summaries."""
     lines = [
-        f"**{len(orphans)} orphaned "
-        f"{'histories' if len(orphans) > 1 else 'history'}** — delete "
-        f"{sum(i['deleted_states'] for i in orphans)} states / "
-        f"{sum(i['deleted_statistics'] for i in orphans)} statistics rows\n"
+        f"**{len(items)} {noun_many if len(items) > 1 else noun_one}** — delete "
+        f"{sum(i['deleted_states'] for i in items)} states / "
+        f"{sum(i['deleted_statistics'] for i in items)} statistics rows\n"
     ]
     lines.extend(
         f"- `{item['entity_id']}`: {item['deleted_states']} states / "
         f"{item['deleted_statistics']} statistics"
-        for item in orphans[:_PREVIEW_MAX_PAIRS]
+        for item in items[:_PREVIEW_MAX_PAIRS]
     )
-    if len(orphans) > _PREVIEW_MAX_PAIRS:
-        lines.append(f"- … and {len(orphans) - _PREVIEW_MAX_PAIRS} more")
+    if len(items) > _PREVIEW_MAX_PAIRS:
+        lines.append(f"- … and {len(items) - _PREVIEW_MAX_PAIRS} more")
+    return lines
+
+
+def _format_purge_preview(preview: dict[str, Any]) -> str:
+    """A markdown summary for the purge confirm screen: totals, then one line
+    per orphan, plus the repack choice."""
+    lines = _deletion_lines(preview["orphans"], "orphaned history", "orphaned histories")
     if preview["repack"]:
-        lines.append(
-            "\nThe database is repacked afterwards to reclaim the freed disk"
-            " space — this can take a while on a large database."
+        lines.append(_REPACK_NOTE)
+    return "\n".join(lines)
+
+
+def _format_delete_preview(preview: dict[str, Any]) -> str:
+    """A markdown summary for the delete confirm screen: totals and per-id
+    lines, warnings for selection parts that matched nothing, the repack choice."""
+    lines = _deletion_lines(preview["deletions"], "history", "histories")
+    not_found = [
+        ("No recorder history found for", preview["not_found_entity_ids"]),
+        ("No recorder history found in domain", preview["not_found_domains"]),
+    ]
+    if any(missing for _, missing in not_found):
+        lines.append("")
+        lines.extend(
+            f"{label}: " + ", ".join(f"`{name}`" for name in missing)
+            for label, missing in not_found
+            if missing
         )
+    if preview["repack"]:
+        lines.append(_REPACK_NOTE)
     return "\n".join(lines)

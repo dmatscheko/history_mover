@@ -1,4 +1,4 @@
-"""End-to-end tests for the orphan purge engine."""
+"""End-to-end tests for the orphan purge and targeted delete engines."""
 
 from __future__ import annotations
 
@@ -11,7 +11,10 @@ from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 
-from custom_components.history_mover.purger import async_purge_orphans
+from custom_components.history_mover.purger import (
+    async_delete_history,
+    async_purge_orphans,
+)
 
 from .common import (
     add_states_meta_only,
@@ -213,6 +216,151 @@ async def test_every_outcome_is_logged(
         "Purged orphaned history sensor.log_gone: deleted 2 states / 0 statistics"
         in caplog.text
     )
+
+
+async def test_delete_by_entity_id_live_and_orphaned(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """Explicitly named ids are deleted whether live or orphaned; anything not
+    named stays — and a live entity records into a fresh history afterwards."""
+    await record_states(hass, "sensor.del_live", ["1", "2"])
+    await add_statistics(hass, "sensor.del_live", [1.0, 2.0])
+    await record_states(hass, "sensor.del_gone", ["1"])
+    await remove_entity(hass, "sensor.del_gone")
+    await record_states(hass, "sensor.del_keep", ["1"])
+
+    report = await async_delete_history(
+        hass, entity_ids=["sensor.del_live", "sensor.del_gone"]
+    )
+    assert [o.entity_id for o in report.outcomes] == [
+        "sensor.del_gone",
+        "sensor.del_live",
+    ]
+    gone, live = report.outcomes
+    assert gone.applied is True
+    assert gone.deleted_states == 2  # 1 value + the recorded removal
+    assert live.deleted_states == 2
+    assert live.deleted_statistics == 2
+    assert report.not_found_entity_ids == []
+    assert report.not_found_domains == []
+    assert await count_states(hass, "sensor.del_live") is None
+    assert await count_statistics(hass, "sensor.del_live") is None
+    assert await count_states(hass, "sensor.del_gone") is None
+    assert await count_states(hass, "sensor.del_keep") == 1
+
+    # The live entity keeps recording — into fresh metadata.
+    await record_states(hass, "sensor.del_live", ["3"])
+    assert await count_states(hass, "sensor.del_live") == 1
+
+
+async def test_delete_by_domain(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """A domain matches every id of that domain — live, orphaned, and
+    statistics-only — but never another domain."""
+    await record_states(hass, "sensor.dom_a", ["1"])
+    await record_states(hass, "sensor.dom_b", ["1", "2"])
+    await add_statistics(hass, "sensor.dom_stats_gone", [1.0])
+    await record_states(hass, "binary_sensor.dom_keep", ["on"])
+
+    report = await async_delete_history(hass, domains=["sensor"])
+    assert [o.entity_id for o in report.outcomes] == [
+        "sensor.dom_a",
+        "sensor.dom_b",
+        "sensor.dom_stats_gone",
+    ]
+    assert await count_states(hass, "sensor.dom_a") is None
+    assert await count_states(hass, "sensor.dom_b") is None
+    assert await count_statistics(hass, "sensor.dom_stats_gone") is None
+    assert await count_states(hass, "binary_sensor.dom_keep") == 1
+
+
+async def test_delete_reports_not_found_selection_parts(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """Selection parts without any recorder history are named in the report —
+    typos surface in the preview instead of silently deleting nothing."""
+    await record_states(hass, "sensor.nf_present", ["1"])
+
+    report = await async_delete_history(
+        hass,
+        entity_ids=["sensor.nf_present", "sensor.typo"],
+        domains=["camera"],
+    )
+    assert [o.entity_id for o in report.outcomes] == ["sensor.nf_present"]
+    assert report.not_found_entity_ids == ["sensor.typo"]
+    assert report.not_found_domains == ["camera"]
+
+
+async def test_delete_dry_run_and_normalisation(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """A dry run changes nothing; ids are stripped and domains are forgiving
+    about case and a trailing dot. Both selectors matching the same id still
+    yields one outcome."""
+    await record_states(hass, "sensor.norm_del", ["1", "2"])
+
+    report = await async_delete_history(
+        hass,
+        entity_ids=["  sensor.norm_del  "],
+        domains=[" Sensor. "],
+        dry_run=True,
+    )
+    assert [o.entity_id for o in report.outcomes] == ["sensor.norm_del"]
+    assert report.outcomes[0].applied is False
+    assert report.not_found_domains == []
+    assert await count_states(hass, "sensor.norm_del") == 2
+
+
+async def test_delete_restrict_to_purges_only_previewed_ids(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """The guided flow's contract: an id matching the selection but not the
+    preview (it appeared later) is left alone."""
+    await record_states(hass, "sensor.rt_a", ["1"])
+    await record_states(hass, "sensor.rt_b", ["1"])
+
+    report = await async_delete_history(
+        hass, domains=["sensor"], restrict_to={"sensor.rt_a"}
+    )
+    assert [o.entity_id for o in report.outcomes] == ["sensor.rt_a"]
+    assert await count_states(hass, "sensor.rt_a") is None
+    assert await count_states(hass, "sensor.rt_b") == 1
+
+
+async def test_delete_validation_errors(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """An empty selection and a non-domain in the domains list are refused
+    before anything is queued."""
+    with pytest.raises(ServiceValidationError, match="at least one"):
+        await async_delete_history(hass)
+    with pytest.raises(ServiceValidationError, match="Not a valid domain"):
+        await async_delete_history(hass, domains=["sensor.foo"])
+
+
+async def test_delete_repack_error_and_logging(
+    recorder_mock: Recorder, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The delete engine shares the repack, error and logging behaviour."""
+    await record_states(hass, "sensor.del_log", ["1"])
+    logger = "custom_components.history_mover.purger"
+    with (
+        patch("custom_components.history_mover.purger.repack_database") as repack,
+        caplog.at_level(logging.INFO, logger=logger),
+    ):
+        await async_delete_history(hass, entity_ids=["sensor.del_log"], repack=True)
+    repack.assert_called_once_with(get_instance(hass))
+    assert "Deleted history sensor.del_log: 1 states / 0 statistics" in caplog.text
+
+    with (
+        patch(
+            "custom_components.history_mover.purger._run_delete",
+            side_effect=RuntimeError("boom"),
+        ),
+        pytest.raises(HomeAssistantError, match="failed while deleting"),
+    ):
+        await async_delete_history(hass, entity_ids=["sensor.x"])
 
 
 async def test_engine_error_surfaces_as_home_assistant_error(
