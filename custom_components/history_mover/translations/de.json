@@ -23,7 +23,7 @@
       },
       "single": {
         "title": "Verlauf verschieben — einzeln",
-        "description": "Den Recorder-Verlauf einer Entität auf eine andere verschieben.",
+        "description": "Den Recorder-Verlauf einer Entität auf eine andere verschieben.\n\nDas Absenden dieses Schritts ändert noch nichts — du siehst zuerst eine Vorschau, was genau verschoben und was verworfen würde, und musst dort noch bestätigen.",
         "data": {
           "old_entity_id": "Quell-Entitäts-ID",
           "new_entity_id": "Ziel-Entitäts-ID",
@@ -37,7 +37,7 @@
       },
       "bulk": {
         "title": "Verlauf verschieben — mehrere",
-        "description": "Jeden Recorder-Verlauf, dessen ID mit dem Quell-Präfix beginnt, auf dieselbe ID mit dem Ziel-Präfix verschieben. IDs, die nicht mehr in der Registrierung stehen, sind eingeschlossen. Für beliebige Zuordnungen die Aktion `history_mover.rename` mit einer Liste verwenden.",
+        "description": "Jeden Recorder-Verlauf, dessen ID mit dem Quell-Präfix beginnt, auf dieselbe ID mit dem Ziel-Präfix verschieben. IDs, die nicht mehr in der Registrierung stehen, sind eingeschlossen. Für beliebige Zuordnungen die Aktion `history_mover.rename` mit einer Liste verwenden.\n\nDas Absenden dieses Schritts ändert noch nichts — du siehst zuerst eine Vorschau, was genau verschoben und was verworfen würde, und musst dort noch bestätigen.",
         "data": {
           "old_prefix": "Quell-Präfix",
           "new_prefix": "Ziel-Präfix",
@@ -51,11 +51,11 @@
       },
       "confirm": {
         "title": "Bestätigen",
-        "description": "Dies ändert die Recorder-Datenbank und kann nicht rückgängig gemacht werden. Prüfen und dann zum Anwenden absenden.\n\n{summary}"
+        "description": "Dies ist die Vorschau — noch wurde nichts verschoben. **Beim Absenden dieses Schritts wird das Verschieben sofort angewendet.** Es ändert die Recorder-Datenbank und kann nicht rückgängig gemacht werden.\n\n{summary}"
       },
       "delete": {
         "title": "Verlauf löschen",
-        "description": "Löscht den vollständigen Recorder-Verlauf (Zustände und Langzeitstatistik) der ausgewählten Entitäten und/oder jeder Entität der ausgewählten Domains — auch von IDs, die es nicht mehr gibt. Vorhandene Entitäten behalten ihren aktuellen Zustand und beginnen einfach einen frischen Verlauf. Vor dem Löschen wird eine Vorschau angezeigt.",
+        "description": "Löscht den vollständigen Recorder-Verlauf (Zustände und Langzeitstatistik) der ausgewählten Entitäten und/oder jeder Entität der ausgewählten Domains — auch von IDs, die es nicht mehr gibt. Vorhandene Entitäten behalten ihren aktuellen Zustand und beginnen einfach einen frischen Verlauf.\n\nDas Absenden dieses Schritts löscht noch nichts — du siehst zuerst eine Vorschau, was genau gelöscht würde, und musst dort noch bestätigen.",
         "data": {
           "entity_ids": "Entitäts-IDs",
           "domains": "Domains",
@@ -69,11 +69,11 @@
       },
       "delete_confirm": {
         "title": "Bestätigen",
-        "description": "Dies löscht die aufgeführten Verläufe aus der Recorder-Datenbank und kann nicht rückgängig gemacht werden. Es werden nur die aufgeführten IDs gelöscht — nichts, was nach dieser Vorschau hinzukommt. Prüfen und dann zum Anwenden absenden.\n\n{summary}"
+        "description": "Dies ist die Vorschau — noch wurde nichts gelöscht. **Beim Absenden dieses Schritts werden die aufgeführten Verläufe sofort gelöscht** — das kann nicht rückgängig gemacht werden. Es werden nur die aufgeführten IDs gelöscht — nichts, was nach dieser Vorschau hinzukommt.\n\n{summary}"
       },
       "purge": {
         "title": "Verwaiste Verläufe bereinigen",
-        "description": "Findet jeden Recorder-Verlauf, in den keine vorhandene Entität mehr schreibt — die ID hat keinen aktuellen Zustand und keinen Eintrag in der Entitätsregistrierung — und löscht dessen Zustände und Statistiken. Solche Verläufe bleiben typischerweise von entfernten Integrationen und gelöschten Entitäten zurück. Deaktivierte Entitäten und externe Statistiken werden nie angetastet. Vor dem Löschen wird eine Vorschau angezeigt.",
+        "description": "Findet jeden Recorder-Verlauf, in den keine vorhandene Entität mehr schreibt — die ID hat keinen aktuellen Zustand und keinen Eintrag in der Entitätsregistrierung — und löscht dessen Zustände und Statistiken. Solche Verläufe bleiben typischerweise von entfernten Integrationen und gelöschten Entitäten zurück. Deaktivierte Entitäten und externe Statistiken werden nie angetastet.\n\nDas Absenden dieses Schritts löscht noch nichts — du siehst zuerst eine Vorschau aller gefundenen verwaisten Verläufe und musst dort noch bestätigen.",
         "data": {
           "repack": "Datenbank anschließend umpacken"
         },
@@ -83,7 +83,7 @@
       },
       "purge_confirm": {
         "title": "Bestätigen",
-        "description": "Dies löscht die aufgeführten Verläufe aus der Recorder-Datenbank und kann nicht rückgängig gemacht werden. Die Verwaist-Prüfung wird beim Anwenden erneut ausgeführt — eine Entität, die seit dieser Vorschau wieder existiert, bleibt unangetastet. Prüfen und dann zum Anwenden absenden.\n\n{summary}"
+        "description": "Dies ist die Vorschau — noch wurde nichts gelöscht. **Beim Absenden dieses Schritts werden die aufgeführten Verläufe sofort gelöscht** — das kann nicht rückgängig gemacht werden. Die Verwaist-Prüfung wird beim Anwenden erneut ausgeführt — eine Entität, die seit dieser Vorschau wieder existiert, bleibt unangetastet.\n\n{summary}"
       }
     },
     "error": {

@@ -23,7 +23,7 @@
       },
       "single": {
         "title": "Move history — single",
-        "description": "Move the recorder history of one entity onto another.",
+        "description": "Move the recorder history of one entity onto another.\n\nSubmitting this step does not change anything yet — you will first see a preview of exactly what would be moved and discarded, and must confirm it there.",
         "data": {
           "old_entity_id": "Source entity ID",
           "new_entity_id": "Target entity ID",
@@ -37,7 +37,7 @@
       },
       "bulk": {
         "title": "Move history — bulk",
-        "description": "Move every recorder history whose id starts with the source prefix onto the same id with the target prefix. Ids no longer in the registry are included. For arbitrary mappings, use the `history_mover.rename` action with a list.",
+        "description": "Move every recorder history whose id starts with the source prefix onto the same id with the target prefix. Ids no longer in the registry are included. For arbitrary mappings, use the `history_mover.rename` action with a list.\n\nSubmitting this step does not change anything yet — you will first see a preview of exactly what would be moved and discarded, and must confirm it there.",
         "data": {
           "old_prefix": "Source prefix",
           "new_prefix": "Target prefix",
@@ -51,11 +51,11 @@
       },
       "confirm": {
         "title": "Confirm",
-        "description": "This changes the recorder database and cannot be undone. Review, then submit to apply.\n\n{summary}"
+        "description": "This is the preview — nothing has been moved yet. **Submitting this step applies the move immediately.** It changes the recorder database and cannot be undone.\n\n{summary}"
       },
       "delete": {
         "title": "Delete history",
-        "description": "Deletes the complete recorder history (states and long-term statistics) of the selected entities and/or every entity of the selected domains — including ids that no longer exist. Live entities keep their current state and simply start a fresh history. You will see a preview before anything is deleted.",
+        "description": "Deletes the complete recorder history (states and long-term statistics) of the selected entities and/or every entity of the selected domains — including ids that no longer exist. Live entities keep their current state and simply start a fresh history.\n\nSubmitting this step does not delete anything yet — you will first see a preview of exactly what would be deleted, and must confirm it there.",
         "data": {
           "entity_ids": "Entity IDs",
           "domains": "Domains",
@@ -69,11 +69,11 @@
       },
       "delete_confirm": {
         "title": "Confirm",
-        "description": "This deletes the listed histories from the recorder database and cannot be undone. Only the listed ids are deleted — nothing that appears after this preview. Review, then submit to apply.\n\n{summary}"
+        "description": "This is the preview — nothing has been deleted yet. **Submitting this step deletes the listed histories immediately** and cannot be undone. Only the listed ids are deleted — nothing that appears after this preview.\n\n{summary}"
       },
       "purge": {
         "title": "Purge orphaned history",
-        "description": "Finds every recorder history that no existing entity writes into anymore — the id has no current state and no entity registry entry — and deletes its states and statistics. These are typically left over from removed integrations and deleted entities. Disabled entities and external statistics are never touched. You will see a preview before anything is deleted.",
+        "description": "Finds every recorder history that no existing entity writes into anymore — the id has no current state and no entity registry entry — and deletes its states and statistics. These are typically left over from removed integrations and deleted entities. Disabled entities and external statistics are never touched.\n\nSubmitting this step does not delete anything yet — you will first see a preview of every orphaned history found, and must confirm it there.",
         "data": {
           "repack": "Repack the database afterwards"
         },
@@ -83,7 +83,7 @@
       },
       "purge_confirm": {
         "title": "Confirm",
-        "description": "This deletes the listed histories from the recorder database and cannot be undone. The orphan check is re-run on apply, so an entity that has come back to life since this preview is left untouched. Review, then submit to apply.\n\n{summary}"
+        "description": "This is the preview — nothing has been deleted yet. **Submitting this step deletes the listed histories immediately** and cannot be undone. The orphan check is re-run on apply, so an entity that has come back to life since this preview is left untouched.\n\n{summary}"
       }
     },
     "error": {
