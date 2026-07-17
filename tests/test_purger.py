@@ -14,6 +14,7 @@ from homeassistant.helpers import entity_registry as er
 from custom_components.history_mover.purger import (
     async_delete_history,
     async_purge_orphans,
+    async_repack_database,
 )
 
 from .common import (
@@ -361,6 +362,29 @@ async def test_delete_repack_error_and_logging(
         pytest.raises(HomeAssistantError, match="failed while deleting"),
     ):
         await async_delete_history(hass, entity_ids=["sensor.x"])
+
+
+async def test_standalone_repack(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """A bare repack runs core's repack without touching any history — and a
+    failure inside it surfaces to the caller."""
+    await record_states(hass, "sensor.repack_keep", ["1"])
+    with patch(
+        "custom_components.history_mover.purger.repack_database"
+    ) as repack:
+        await async_repack_database(hass)
+    repack.assert_called_once_with(get_instance(hass))
+    assert await count_states(hass, "sensor.repack_keep") == 1
+
+    with (
+        patch(
+            "custom_components.history_mover.purger.repack_database",
+            side_effect=RuntimeError("boom"),
+        ),
+        pytest.raises(HomeAssistantError, match="failed while repacking"),
+    ):
+        await async_repack_database(hass)
 
 
 async def test_engine_error_surfaces_as_home_assistant_error(

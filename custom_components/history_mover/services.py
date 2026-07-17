@@ -1,12 +1,13 @@
-"""The ``rename``, ``delete`` and ``purge_orphans`` admin services.
+"""The ``rename``, ``delete``, ``purge_orphans`` and ``repack`` admin services.
 
 A ``rename`` call carries one pair (``old_entity_id`` + ``new_entity_id``) or
 many (``renames``); ``delete`` removes the history of named entity ids and/or
 whole domains; ``purge_orphans`` takes no ids at all — it finds every history
-no existing entity writes into anymore. All are admin-only and return response
-data — a per-id report and, for a dry run, a preview — so they are equally
-usable from Developer Tools, scripts, and the guided UI (which calls the same
-engines).
+no existing entity writes into anymore; ``repack`` only rewrites the database
+file to reclaim freed space. All are admin-only, and all but ``repack`` return
+response data — a per-id report and, for a dry run, a preview — so they are
+equally usable from Developer Tools, scripts, and the guided UI (which calls
+the same engines).
 """
 
 from __future__ import annotations
@@ -42,11 +43,12 @@ from .const import (
     SERVICE_DELETE,
     SERVICE_PURGE_ORPHANS,
     SERVICE_RENAME,
+    SERVICE_REPACK,
     STATUS_RENAMED,
     STATUS_REPLACED,
 )
 from .mover import RenameRequest, async_move_history
-from .purger import async_delete_history, async_purge_orphans
+from .purger import async_delete_history, async_purge_orphans, async_repack_database
 from .references import ReferenceHit, async_scan_references
 
 if TYPE_CHECKING:
@@ -122,6 +124,9 @@ def async_setup_services(hass: HomeAssistant) -> None:
             repack=call.data[ATTR_REPACK],
         )
 
+    async def _handle_repack(call: ServiceCall) -> None:
+        await async_repack_database(hass)
+
     async_register_admin_service(
         hass,
         DOMAIN,
@@ -146,6 +151,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         schema=_PURGE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
+    async_register_admin_service(hass, DOMAIN, SERVICE_REPACK, _handle_repack)
 
 
 async def async_perform_rename(

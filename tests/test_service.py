@@ -15,6 +15,7 @@ from custom_components.history_mover.const import (
     SERVICE_DELETE,
     SERVICE_PURGE_ORPHANS,
     SERVICE_RENAME,
+    SERVICE_REPACK,
 )
 
 from .common import (
@@ -34,6 +35,7 @@ async def _setup(hass: HomeAssistant) -> None:
     assert hass.services.has_service(DOMAIN, SERVICE_RENAME)
     assert hass.services.has_service(DOMAIN, SERVICE_DELETE)
     assert hass.services.has_service(DOMAIN, SERVICE_PURGE_ORPHANS)
+    assert hass.services.has_service(DOMAIN, SERVICE_REPACK)
 
 
 async def _call(hass: HomeAssistant, **data: object) -> dict:
@@ -252,6 +254,18 @@ async def test_purge_orphans_service_end_to_end(
     assert await count_states(hass, "sensor.svc_gone") is None
     assert await count_statistics(hass, "sensor.svc_gone") is None
     assert await count_states(hass, "sensor.svc_alive") == 1
+
+
+async def test_repack_service_runs_repack(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """The field-less repack service runs core's repack and blocks until done."""
+    await _setup(hass)
+    with patch(
+        "custom_components.history_mover.purger.repack_database"
+    ) as repack:
+        await hass.services.async_call(DOMAIN, SERVICE_REPACK, {}, blocking=True)
+    repack.assert_called_once()
 
 
 async def test_reference_scan_can_be_disabled(

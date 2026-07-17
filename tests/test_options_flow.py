@@ -549,6 +549,52 @@ async def test_delete_apply_failure_shows_form_error_and_allows_retry(
         assert call.kwargs["restrict_to"] == {"sensor.df_gone"}
 
 
+async def test_repack_via_options(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """The standalone repack: menu → explanation step → submit runs it."""
+    entry = await _setup_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "repack"}
+    )
+    assert result["step_id"] == "repack"
+
+    with patch(
+        "custom_components.history_mover.purger.repack_database"
+    ) as repack:
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {}
+        )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    repack.assert_called_once()
+
+
+async def test_repack_failure_shows_form_error_and_allows_retry(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    entry = await _setup_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "repack"}
+    )
+    with patch(
+        "custom_components.history_mover.config_flow.async_repack_database",
+        side_effect=[HomeAssistantError("recorder timeout"), None],
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {}
+        )
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "repack"
+        assert result["errors"] == {"base": "repack_failed"}
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {}
+        )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
 def _purge_item(index: int) -> dict[str, object]:
     return {
         "entity_id": f"sensor.orph_{index}",
@@ -601,23 +647,32 @@ def test_format_preview_uncapped_for_the_file() -> None:
     assert "… and" not in text
 
 
-def test_format_preview_cap_line_points_at_saved_file() -> None:
-    """With the full preview saved, the cap line says where to find it."""
+_FILE_NOTE_20 = (
+    "**Only the first 15 of 20 entries are shown below — the complete list is"
+    " in `history_mover_preview.md` in your config folder.**"
+)
+
+
+def test_format_preview_file_note_is_its_own_paragraph_above_the_list() -> None:
+    """With the full preview saved, a bold note between the totals and the
+    shortened list points at the file — at the bottom nobody would read it."""
     preview = {"renames": [_preview_item(i, "renamed") for i in range(20)]}
-    assert (
-        "- … and 5 more pairs — the complete list is in "
-        "`history_mover_preview.md` in your config folder"
-    ) in _format_preview(preview, saved=True)
+    text = _format_preview(preview, saved=True)
+    assert _FILE_NOTE_20 in text
+    assert text.index("**20 pairs**") < text.index(_FILE_NOTE_20)
+    assert text.index(_FILE_NOTE_20) < text.index("sensor.old_0")
+    assert "- … and 5 more pairs" in text  # the cap line stays plain
 
     purge = {
         "dry_run": True,
         "repack": False,
         "orphans": [_purge_item(i) for i in range(20)],
     }
-    assert (
-        "- … and 5 more — the complete list is in "
-        "`history_mover_preview.md` in your config folder"
-    ) in _format_purge_preview(purge, saved=True)
+    text = _format_purge_preview(purge, saved=True)
+    assert _FILE_NOTE_20 in text
+    assert text.index("**20 orphaned histories**") < text.index(_FILE_NOTE_20)
+    assert text.index(_FILE_NOTE_20) < text.index("sensor.orph_0")
+    assert "- … and 5 more" in text
 
 
 async def _make_orphans(hass: HomeAssistant, count: int) -> list[str]:
@@ -651,9 +706,10 @@ async def test_purge_preview_saves_complete_list_to_file(
     summary = result["description_placeholders"]["summary"]
     assert "**18 orphaned histories**" in summary
     assert (
-        "… and 3 more — the complete list is in `history_mover_preview.md`"
-        in summary
-    )
+        "**Only the first 15 of 18 entries are shown below — the complete"
+        " list is in `history_mover_preview.md` in your config folder.**"
+    ) in summary
+    assert "- … and 3 more" in summary
     assert ids[17] not in summary  # capped in the dialog...
 
     content = await hass.async_add_executor_job(

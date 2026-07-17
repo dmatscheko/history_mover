@@ -4,13 +4,15 @@ from typing import Final
 
 DOMAIN: Final = "history_mover"
 
-# The three admin services: `rename` moves recorder history from one entity id
+# The four admin services: `rename` moves recorder history from one entity id
 # onto another (one call carries one or many pairs); `delete` removes the
 # history of explicitly named entity ids and/or whole domains; `purge_orphans`
-# deletes every history no existing entity writes into anymore.
+# deletes every history no existing entity writes into anymore; `repack`
+# rewrites the database file to reclaim freed space without deleting anything.
 SERVICE_RENAME: Final = "rename"
 SERVICE_DELETE: Final = "delete"
 SERVICE_PURGE_ORPHANS: Final = "purge_orphans"
+SERVICE_REPACK: Final = "repack"
 
 # Service / flow field names.
 ATTR_OLD_ENTITY_ID: Final = "old_entity_id"

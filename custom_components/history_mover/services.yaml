@@ -79,3 +79,4 @@ purge_orphans:
       default: false
       selector:
         boolean:
+repack:

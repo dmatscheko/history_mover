@@ -18,7 +18,8 @@
           "single": "Move single entity",
           "bulk": "Bulk move (by prefix)",
           "delete": "Delete history (by entity or domain)",
-          "purge": "Purge orphaned history"
+          "purge": "Purge orphaned history",
+          "repack": "Repack the database"
         }
       },
       "single": {
@@ -84,6 +85,10 @@
       "purge_confirm": {
         "title": "Confirm",
         "description": "This is the preview — nothing has been deleted yet. **Submitting this step deletes the listed histories immediately** and cannot be undone. The orphan check is re-run on apply, so an entity that has come back to life since this preview is left untouched.\n\n{summary}"
+      },
+      "repack": {
+        "title": "Repack the database",
+        "description": "Rewrites the entire database file to reclaim the disk space freed by earlier deletions and purges — the same repack as the `recorder.purge` action. Nothing is deleted. It can take a while on a large database and temporarily needs additional free disk space of roughly the database size.\n\n**Submitting this step starts the repack immediately.**"
       }
     },
     "error": {
@@ -94,12 +99,13 @@
       "overlapping": "The renamed ids would overlap the ids being renamed (the target prefix must not extend the source prefix). Split this into separate operations.",
       "no_matches": "No recorder history was found for that source prefix.",
       "apply_failed": "Applying the move failed or timed out. Check the Home Assistant log ('Moved history' entries show what was applied) before submitting again.",
-      "no_orphans": "No orphaned history found — every recorder entry belongs to an existing entity.",
+      "no_orphans": "No orphaned history found — every recorder entry belongs to an existing entity. To only reclaim disk space, use \"Repack the database\" from the menu.",
       "purge_failed": "Applying the purge failed or timed out. Check the Home Assistant log ('Purged orphaned history' entries show what was deleted) before submitting again.",
       "empty_selection": "Enter at least one entity ID or domain.",
       "invalid_domain": "Enter plain domains like `sensor` — specific ids belong in the entity IDs field.",
       "no_delete_matches": "No recorder history matches this selection. IDs are matched exactly as stored — check for typos.",
-      "delete_failed": "Applying the delete failed or timed out. Check the Home Assistant log ('Deleted history' entries show what was deleted) before submitting again."
+      "delete_failed": "Applying the delete failed or timed out. Check the Home Assistant log ('Deleted history' entries show what was deleted) before submitting again.",
+      "repack_failed": "The repack failed or timed out — on a large database it may still be running in the background. Check the Home Assistant log before retrying."
     }
   },
   "services": {
@@ -168,6 +174,10 @@
           "description": "After purging, try to reclaim the freed disk space by rewriting the entire database file (the same repack as the `recorder.purge` action). Can take a while on a large database."
         }
       }
+    },
+    "repack": {
+      "name": "Repack the database",
+      "description": "Rewrites the entire database file to reclaim the disk space freed by earlier deletions and purges (the same repack as the `recorder.purge` action). Deletes nothing. Can take a while on a large database and temporarily needs additional free disk space of roughly the database size."
     }
   },
   "selector": {

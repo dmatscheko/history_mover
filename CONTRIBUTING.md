@@ -1,9 +1,10 @@
 # Contributing
 
 Thanks for helping! History Mover is a small, focused integration — the
-recorder engines (rename in `mover.py`; targeted delete and orphan purge in
-`purger.py`), three admin services, a guided flow, and a report-only
-reference scan.
+recorder engines (rename in `mover.py`; targeted delete, orphan purge and
+repack in `purger.py`), four admin services, a guided flow, and a report-only
+reference scan. How the engines work under the hood is described in
+[docs/internals.md](docs/internals.md).
 
 ## Development
 

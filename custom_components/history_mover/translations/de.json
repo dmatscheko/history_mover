@@ -18,7 +18,8 @@
           "single": "Einzelne Entität verschieben",
           "bulk": "Mehrere verschieben (nach Präfix)",
           "delete": "Verlauf löschen (nach Entität oder Domain)",
-          "purge": "Verwaiste Verläufe bereinigen"
+          "purge": "Verwaiste Verläufe bereinigen",
+          "repack": "Datenbank umpacken"
         }
       },
       "single": {
@@ -84,6 +85,10 @@
       "purge_confirm": {
         "title": "Bestätigen",
         "description": "Dies ist die Vorschau — noch wurde nichts gelöscht. **Beim Absenden dieses Schritts werden die aufgeführten Verläufe sofort gelöscht** — das kann nicht rückgängig gemacht werden. Die Verwaist-Prüfung wird beim Anwenden erneut ausgeführt — eine Entität, die seit dieser Vorschau wieder existiert, bleibt unangetastet.\n\n{summary}"
+      },
+      "repack": {
+        "title": "Datenbank umpacken",
+        "description": "Schreibt die gesamte Datenbankdatei neu, um den durch frühere Lösch- und Bereinigungsvorgänge freigewordenen Speicherplatz zurückzugewinnen — dasselbe Umpacken wie bei der Aktion `recorder.purge`. Es wird nichts gelöscht. Bei einer großen Datenbank kann es eine Weile dauern und benötigt vorübergehend zusätzlichen freien Speicherplatz etwa in der Größe der Datenbank.\n\n**Beim Absenden dieses Schritts startet das Umpacken sofort.**"
       }
     },
     "error": {
@@ -94,12 +99,13 @@
       "overlapping": "Die umbenannten IDs würden sich mit den umzubenennenden IDs überschneiden (das Ziel-Präfix darf das Quell-Präfix nicht erweitern). Teile dies in getrennte Vorgänge auf.",
       "no_matches": "Für dieses Quell-Präfix wurde kein Recorder-Verlauf gefunden.",
       "apply_failed": "Das Anwenden des Verschiebens ist fehlgeschlagen oder hat das Zeitlimit überschritten. Prüfe das Home-Assistant-Log (Einträge „Moved history“ zeigen, was angewendet wurde), bevor du erneut absendest.",
-      "no_orphans": "Keine verwaisten Verläufe gefunden — jeder Recorder-Eintrag gehört zu einer vorhandenen Entität.",
+      "no_orphans": "Keine verwaisten Verläufe gefunden — jeder Recorder-Eintrag gehört zu einer vorhandenen Entität. Um nur Speicherplatz zurückzugewinnen, nutze „Datenbank umpacken“ im Menü.",
       "purge_failed": "Das Anwenden der Bereinigung ist fehlgeschlagen oder hat das Zeitlimit überschritten. Prüfe das Home-Assistant-Log (Einträge „Purged orphaned history“ zeigen, was gelöscht wurde), bevor du erneut absendest.",
       "empty_selection": "Gib mindestens eine Entitäts-ID oder Domain ein.",
       "invalid_domain": "Gib reine Domains wie `sensor` ein — einzelne IDs gehören ins Feld „Entitäts-IDs“.",
       "no_delete_matches": "Kein Recorder-Verlauf passt zu dieser Auswahl. IDs werden exakt so verglichen, wie sie gespeichert sind — prüfe auf Tippfehler.",
-      "delete_failed": "Das Anwenden des Löschens ist fehlgeschlagen oder hat das Zeitlimit überschritten. Prüfe das Home-Assistant-Log (Einträge „Deleted history“ zeigen, was gelöscht wurde), bevor du erneut absendest."
+      "delete_failed": "Das Anwenden des Löschens ist fehlgeschlagen oder hat das Zeitlimit überschritten. Prüfe das Home-Assistant-Log (Einträge „Deleted history“ zeigen, was gelöscht wurde), bevor du erneut absendest.",
+      "repack_failed": "Das Umpacken ist fehlgeschlagen oder hat das Zeitlimit überschritten — bei einer großen Datenbank läuft es möglicherweise noch im Hintergrund weiter. Prüfe das Home-Assistant-Log, bevor du es erneut versuchst."
     }
   },
   "services": {
@@ -168,6 +174,10 @@
           "description": "Nach dem Bereinigen versuchen, den freigewordenen Speicherplatz zurückzugewinnen, indem die gesamte Datenbankdatei neu geschrieben wird (dasselbe Umpacken wie bei der Aktion `recorder.purge`). Kann bei einer großen Datenbank eine Weile dauern."
         }
       }
+    },
+    "repack": {
+      "name": "Datenbank umpacken",
+      "description": "Schreibt die gesamte Datenbankdatei neu, um den durch frühere Lösch- und Bereinigungsvorgänge freigewordenen Speicherplatz zurückzugewinnen (dasselbe Umpacken wie bei der Aktion `recorder.purge`). Löscht nichts. Kann bei einer großen Datenbank eine Weile dauern und benötigt vorübergehend zusätzlichen freien Speicherplatz etwa in der Größe der Datenbank."
     }
   },
   "selector": {

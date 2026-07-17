@@ -18,12 +18,15 @@ Two engines share the machinery in this module:
 * **Targeted delete** removes the history of explicitly named entity ids
   (matched exactly as stored, so ids that no longer exist — even malformed
   ones — can be addressed) and/or of whole domains.
+* **Repack** on its own rewrites the database file without deleting anything —
+  for reclaiming the space of deletions that ran without it.
 
-Both delete states, long-term and short-term statistics, the meta rows, and
-the shared attribute rows nothing references anymore — optionally repacking
-the database afterwards (the same ``repack_database`` that ``recorder.purge``
-with ``repack: true`` runs). External statistics (``domain:object_id``, e.g.
-imported energy data) never have an entity and are never touched.
+The two delete flavours remove states, long-term and short-term statistics,
+the meta rows, and the shared attribute rows nothing references anymore —
+optionally repacking the database afterwards (the same ``repack_database``
+that ``recorder.purge`` with ``repack: true`` runs). External statistics
+(``domain:object_id``, e.g. imported energy data) never have an entity and
+are never touched.
 
 Timing safety, in the same spirit as the mover:
 
@@ -208,9 +211,20 @@ async def async_delete_history(
     return task.report
 
 
+async def async_repack_database(hass: HomeAssistant) -> None:
+    """Repack the database without deleting anything.
+
+    The same repack ``recorder.purge``'s repack option runs — for reclaiming
+    the space of deletions that were applied without it (by this integration,
+    core purges, or anything else).
+    """
+    task = _RepackTask()
+    await _wait_for_task(hass, task, "repacking the database")
+
+
 async def _wait_for_task(
     hass: HomeAssistant,
-    task: _PurgeOrphansTask | _DeleteHistoryTask,
+    task: _PurgeOrphansTask | _DeleteHistoryTask | _RepackTask,
     doing: str,
 ) -> None:
     """Queue a task on the recorder thread and wait for it to finish."""
@@ -287,6 +301,23 @@ class _DeleteHistoryTask(RecorderTask):
             _maybe_repack(instance, self.repack, self.dry_run)
         except Exception as err:  # surfaced to the caller via .error
             _LOGGER.exception("History Mover delete task failed")
+            self.error = err
+        finally:
+            self.done.set()
+
+
+@dataclass(slots=True)
+class _RepackTask(RecorderTask):
+    """Runs a bare repack on the recorder thread and signals completion."""
+
+    error: Exception | None = None
+    done: threading.Event = field(default_factory=threading.Event)
+
+    def run(self, instance: Recorder) -> None:
+        try:
+            _maybe_repack(instance, repack=True, dry_run=False)
+        except Exception as err:  # surfaced to the caller via .error
+            _LOGGER.exception("History Mover repack task failed")
             self.error = err
         finally:
             self.done.set()

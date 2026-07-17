@@ -48,7 +48,7 @@ from .const import (
     DOMAIN,
 )
 from .mover import RenameRequest, async_list_history_ids
-from .purger import valid_delete_domain
+from .purger import async_repack_database, valid_delete_domain
 from .services import (
     async_perform_delete,
     async_perform_purge,
@@ -119,7 +119,8 @@ class HistoryMoverOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         return self.async_show_menu(
-            step_id="init", menu_options=["single", "bulk", "delete", "purge"]
+            step_id="init",
+            menu_options=["single", "bulk", "delete", "purge", "repack"],
         )
 
     async def async_step_single(
@@ -392,6 +393,25 @@ class HistoryMoverOptionsFlow(OptionsFlow):
             description_placeholders={"summary": self._summary or ""},
         )
 
+    async def async_step_repack(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Run a bare repack on submit — nothing is deleted, so no preview."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                await async_repack_database(self.hass)
+            except HomeAssistantError:
+                # Keep the flow alive with a real error instead of the
+                # generic unknown-error toast.
+                _LOGGER.exception("Repacking from the guided flow failed")
+                errors["base"] = "repack_failed"
+            else:
+                return self.async_create_entry(title="", data={})
+        return self.async_show_form(
+            step_id="repack", data_schema=vol.Schema({}), errors=errors
+        )
+
 
 # The confirm dialog lists at most this many pairs; a bulk move of hundreds
 # gets totals plus a "… and N more" line instead of an unreadable wall. The
@@ -429,12 +449,18 @@ async def _async_save_full_preview(
     return True
 
 
-def _cap_line(hidden: int, noun: str, saved: bool) -> str:
-    """The "… and N more" line — pointing at the full-preview file if it exists."""
-    line = f"- … and {hidden} {noun}"
-    if saved:
-        line += f" — the complete list is in `{_PREVIEW_FILE}` in your config folder"
-    return line
+def _file_note(total: int) -> str:
+    """Own bold paragraph pointing at the full-preview file.
+
+    Placed right below the totals, *above* the shortened list — at the bottom
+    hardly anyone would read it, and it is the important part of a preview
+    with thousands of entries.
+    """
+    return (
+        f"**Only the first {_PREVIEW_MAX_PAIRS} of {total} entries are shown"
+        f" below — the complete list is in `{_PREVIEW_FILE}` in your config"
+        " folder.**\n"
+    )
 
 
 def _format_preview(
@@ -455,7 +481,9 @@ def _format_preview(
         for item in renames[:limit]
     ]
     if limit is not None and len(renames) > limit:
-        lines.append(_cap_line(len(renames) - limit, "more pairs", saved))
+        lines.append(f"- … and {len(renames) - limit} more pairs")
+        if saved:
+            lines.insert(0, _file_note(len(renames)))
     if len(renames) > 1:
         statuses = ", ".join(
             f"{count} {status}"
@@ -494,13 +522,15 @@ def _deletion_lines(
         f"{sum(i['deleted_states'] for i in items)} states / "
         f"{sum(i['deleted_statistics'] for i in items)} statistics rows\n"
     ]
+    if saved and limit is not None and len(items) > limit:
+        lines.append(_file_note(len(items)))
     lines.extend(
         f"- `{item['entity_id']}`: {item['deleted_states']} states / "
         f"{item['deleted_statistics']} statistics"
         for item in items[:limit]
     )
     if limit is not None and len(items) > limit:
-        lines.append(_cap_line(len(items) - limit, "more", saved))
+        lines.append(f"- … and {len(items) - limit} more")
     return lines
 
 
