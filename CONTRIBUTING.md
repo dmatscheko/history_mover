@@ -34,18 +34,8 @@ validator. Points worth knowing:
 ## Brand assets
 
 The SVG sources live in [`support/`](support/); the shipped PNGs are in
-`custom_components/history_mover/brand/`. To regenerate (needs `rsvg-convert`):
-
-```bash
-cd support
-B=../custom_components/history_mover/brand
-rsvg-convert -w 256 -h 256 icon.svg      -o "$B/icon.png"
-rsvg-convert -w 512 -h 512 icon.svg      -o "$B/icon@2x.png"
-rsvg-convert -h 128        logo.svg      -o "$B/logo.png"
-rsvg-convert -h 256        logo.svg      -o "$B/logo@2x.png"
-rsvg-convert -h 128        logo-dark.svg -o "$B/dark_logo.png"
-rsvg-convert -h 256        logo-dark.svg -o "$B/dark_logo@2x.png"
-```
+`custom_components/history_mover/brand/`. To regenerate all of them, run
+[`support/render.sh`](support/render.sh) (needs `rsvg-convert`).
 
 For listing in the HACS default store, the same images should also be submitted to
 [home-assistant/brands](https://github.com/home-assistant/brands).

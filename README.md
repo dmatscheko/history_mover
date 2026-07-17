@@ -1,4 +1,7 @@
-# History Mover
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="custom_components/history_mover/brand/dark_logo@2x.png">
+  <img alt="History Mover" src="custom_components/history_mover/brand/logo@2x.png" width="480">
+</picture>
 
 [![HACS: custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz)
 [![Tests](https://github.com/dmatscheko/history_mover/actions/workflows/test.yml/badge.svg)](https://github.com/dmatscheko/history_mover/actions/workflows/test.yml)
@@ -106,8 +109,9 @@ states — orphaned long-term statistics survive it entirely.
 
 ## Credits
 
-The brand mark uses the *history* glyph from
-[Material Design Icons](https://pictogrammers.com/library/mdi/) (Apache-2.0).
+The brand mark is derived from the *transit-connection-horizontal* glyph from
+[Material Design Icons](https://pictogrammers.com/library/mdi/) (Apache-2.0),
+with an added arrowhead.
 
 ## License
 

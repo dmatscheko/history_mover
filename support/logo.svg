@@ -1,7 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="820" height="200" viewBox="0 0 820 200">
-  <!-- Horizontal lockup for light backgrounds (dark wordmark). -->
-  <rect x="20" y="20" width="160" height="160" rx="40" fill="#F49500"/>
-  <path transform="translate(55 47) scale(3.9)" fill="#F2F4F9"
-        d="M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3Z"/>
+  <!-- Horizontal lockup for light backgrounds (dark wordmark). The tile is
+       the H-shaped brand mark from icon.svg, scaled to 160px. -->
+  <g transform="translate(20 20) scale(0.625)">
+    <path fill="#F49500" d="M42 0H56C84 0 84 56 112 56H144C172 56 172 0 200 0H214A42 42 0 0 1 256 42V214A42 42 0 0 1 214 256H200C172 256 172 200 144 200H112C84 200 84 256 56 256H42A42 42 0 0 1 0 214V42A42 42 0 0 1 42 0Z"/>
+    <g transform="translate(53 54) scale(6.25)" stroke="#F2F4F9" fill="none" stroke-width="2">
+      <circle cx="5" cy="19" r="2"/>
+      <path d="M7.8 19H18C19.66 19 21 17.66 21 16V15C21 13.34 19.66 12 18 12H6C4.34 12 3 10.66 3 9V8C3 6.34 4.34 5 6 5H16" stroke-linecap="round"/>
+      <circle cx="12" cy="12" r="3" fill="#F2F4F9" stroke="none"/>
+      <path d="M16.8 2.3 21.4 5 16.8 7.7Z" fill="#F2F4F9" stroke-width="1.2" stroke-linejoin="round"/>
+    </g>
+  </g>
   <text x="220" y="125" font-family="Helvetica, Arial, sans-serif" font-size="76" font-weight="700" fill="#1D2126">History Mover</text>
 </svg>
