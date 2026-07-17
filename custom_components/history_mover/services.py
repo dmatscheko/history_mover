@@ -1,9 +1,11 @@
-"""The ``history_mover.rename`` admin service.
+"""The ``history_mover.rename`` and ``history_mover.purge_orphans`` admin services.
 
-One call carries one pair (``old_entity_id`` + ``new_entity_id``) or many
-(``renames``). It is admin-only and returns response data — a per-pair report
-and, for a dry run, a preview — so it is equally usable from Developer Tools,
-scripts, and the guided UI (which calls the same engine).
+A ``rename`` call carries one pair (``old_entity_id`` + ``new_entity_id``) or
+many (``renames``); ``purge_orphans`` takes no ids at all — it finds every
+history no existing entity writes into anymore. Both are admin-only and return
+response data — a per-id report and, for a dry run, a preview — so they are
+equally usable from Developer Tools, scripts, and the guided UI (which calls
+the same engines).
 """
 
 from __future__ import annotations
@@ -29,15 +31,18 @@ from .const import (
     ATTR_OLD_ENTITY_ID,
     ATTR_ON_CONFLICT,
     ATTR_RENAMES,
+    ATTR_REPACK,
     ATTR_SCAN_REFERENCES,
     CONFLICT_MODES,
     DEFAULT_ON_CONFLICT,
     DOMAIN,
+    SERVICE_PURGE_ORPHANS,
     SERVICE_RENAME,
     STATUS_RENAMED,
     STATUS_REPLACED,
 )
 from .mover import RenameRequest, async_move_history
+from .purger import async_purge_orphans
 from .references import ReferenceHit, async_scan_references
 
 if TYPE_CHECKING:
@@ -63,10 +68,17 @@ _RENAME_SCHEMA = vol.Schema(
     }
 )
 
+_PURGE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_DRY_RUN, default=False): cv.boolean,
+        vol.Optional(ATTR_REPACK, default=False): cv.boolean,
+    }
+)
+
 
 @callback
 def async_setup_services(hass: HomeAssistant) -> None:
-    """Register the rename service once."""
+    """Register both admin services once (they only ever register together)."""
     if hass.services.has_service(DOMAIN, SERVICE_RENAME):
         return
 
@@ -79,12 +91,27 @@ def async_setup_services(hass: HomeAssistant) -> None:
             scan_references=call.data[ATTR_SCAN_REFERENCES],
         )
 
+    async def _handle_purge(call: ServiceCall) -> ServiceResponse:
+        return await async_perform_purge(
+            hass,
+            dry_run=call.data[ATTR_DRY_RUN],
+            repack=call.data[ATTR_REPACK],
+        )
+
     async_register_admin_service(
         hass,
         DOMAIN,
         SERVICE_RENAME,
         _handle_rename,
         schema=_RENAME_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    async_register_admin_service(
+        hass,
+        DOMAIN,
+        SERVICE_PURGE_ORPHANS,
+        _handle_purge,
+        schema=_PURGE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
 
@@ -123,6 +150,29 @@ async def async_perform_rename(
         if references and not dry_run:
             _notify_lingering_references(hass, references)
     return response
+
+
+async def async_perform_purge(
+    hass: HomeAssistant,
+    *,
+    dry_run: bool,
+    repack: bool,
+    restrict_to: set[str] | None = None,
+) -> dict[str, Any]:
+    """Purge orphaned histories and shape the engine's report into a response.
+
+    Shared by the service and the guided UI so both behave identically. The
+    UI passes ``restrict_to`` (its previewed ids) so an apply never deletes
+    anything the preview did not show.
+    """
+    outcomes = await async_purge_orphans(
+        hass, dry_run=dry_run, repack=repack, restrict_to=restrict_to
+    )
+    return {
+        "dry_run": dry_run,
+        "repack": repack,
+        "orphans": [outcome.as_dict() for outcome in outcomes],
+    }
 
 
 def _collect_requests(data: Mapping[str, Any]) -> list[RenameRequest]:

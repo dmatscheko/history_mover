@@ -31,6 +31,11 @@ History Mover fills the gaps the built-in rename leaves open:
   database. History Mover can re-home it by id.
 - **Bulk / migration.** Move hundreds of entities in one operation (e.g. migrating
   a whole device from one integration to another) by prefix or by an explicit list.
+- **Purge orphaned history.** Find every history that no existing entity writes
+  into anymore (typically left over from removed integrations and deleted
+  entities) and delete it in one sweep — states *and* statistics, with a preview
+  and an optional database repack. The built-in `recorder.purge_entities` needs
+  the ids typed in by hand and does not touch statistics.
 
 After the move, the live target **continues recording into the adopted history**,
 usually with no restart.
@@ -63,9 +68,12 @@ On the **History Mover** card, click **Configure**:
   registry) and a target id.
 - **Bulk (by prefix)** — enter a source prefix and a target prefix; every recorder
   id starting with the source prefix is remapped.
+- **Purge orphaned history** — tick (or not) *Repack the database afterwards*,
+  and get a list of every orphaned history with row counts before anything is
+  deleted.
 
-Either way you get a **preview** (how many states/statistics move, and how many get
-discarded) before you confirm.
+Either way you get a **preview** (which ids are affected, how many
+states/statistics rows) before you confirm.
 
 ### The `history_mover.rename` action
 
@@ -116,6 +124,52 @@ in the order you intend.
 4. Remove the old integration.
 5. Update anything the **reference scan** flagged (see below), then reload/restart.
 
+### The `history_mover.purge_orphans` action
+
+Deletes every recorder history that **no existing entity writes into anymore**:
+the id has no current state in the state machine and no entry in the entity
+registry. That is what removed integrations, deleted helpers and old renames
+leave behind. Home Assistant's own `recorder.purge_entities` wants the ids
+typed in by hand and only purges states; the Developer Tools statistics tab
+fixes one statistic at a time. This action finds them all and removes both
+kinds of history — plus the shared attribute rows nothing references anymore.
+
+Preview first:
+
+```yaml
+action: history_mover.purge_orphans
+data:
+  dry_run: true          # report only; change nothing
+```
+
+Then apply, optionally reclaiming the freed disk space:
+
+```yaml
+action: history_mover.purge_orphans
+data:
+  repack: true           # rewrite the database file afterwards (recorder.purge's repack)
+```
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `dry_run` | `false` | Report which histories would be deleted (with row counts); change nothing. Call with *Return response* to see it. |
+| `repack` | `false` | After purging, repack/vacuum the database to give the freed space back to the OS. Can take a while on a large database. |
+
+The response lists each orphan with its `deleted_states` / `deleted_statistics`
+row counts. What is **never** touched:
+
+- anything with a current state — including entities the recorder is filtered
+  to not record;
+- anything still in the entity registry — covering **disabled entities** and
+  integrations that are temporarily unloaded or failing;
+- **external statistics** (ids with a colon, e.g. imported energy data): they
+  have no entity by design.
+
+Applying is refused while Home Assistant is still starting, because entities
+that simply have not loaded yet would look orphaned. For the same reason, run
+it on a fully started system — an entity provided by a YAML platform without a
+unique id (no registry entry) counts as alive only through its current state.
+
 ## How it works
 
 The `states` and `statistics` tables don't store entity ids — they reference a
@@ -125,11 +179,18 @@ therefore just:
 1. delete the target's own rows for that stream (the discarded history), then
 2. re-label the source's `states_meta` / `statistics_meta` row to the target id.
 
+The orphan purge walks the same two meta tables the other way around: every id
+found there that has no current state and no registry entry gets its rows and
+meta rows deleted. Deleting states also cleans up the deduplicated
+`state_attributes` rows that no surviving state shares, and the optional repack
+runs the same `repack_database` as `recorder.purge` with `repack: true`.
+
 It all runs inside the recorder's own SQLAlchemy session, on the recorder thread,
 as a single task — the same machinery Home Assistant uses for its built-in rename.
 Afterwards the in-memory caches (`entity_id → metadata_id`, the `old_state_id`
-link tracking, and the statistics meta cache) are invalidated so the live target
-resolves to the adopted history on its next recorded state.
+link tracking, the statistics meta cache, and the shared-attributes cache) are
+invalidated so the live target resolves to the adopted history on its next
+recorded state.
 
 Because it goes through the recorder session, it works the same on **SQLite,
 MariaDB/MySQL and PostgreSQL**.
@@ -145,11 +206,14 @@ and `.storage/core.config_entries` (UI-created helpers). Matches are whole-id on
 
 ## Safety
 
-- Admin-only action.
-- **Dry run** first; the UI always previews before applying.
-- Every applied move is logged (with row counts); previews, skips and noops log
-  at debug — enable with `logger: {logs: {custom_components.history_mover: debug}}`.
-- Take a backup before large migrations — the discard is not reversible.
+- Admin-only actions.
+- **Dry run** first; the UI always previews before applying. The purge UI
+  additionally applies only to the ids it previewed, and re-checks each is
+  still orphaned at apply time.
+- Every applied move and purge is logged (with row counts); previews, skips and
+  noops log at debug — enable with
+  `logger: {logs: {custom_components.history_mover: debug}}`.
+- Take a backup before large migrations or purges — neither is reversible.
 
 ## Limitations
 

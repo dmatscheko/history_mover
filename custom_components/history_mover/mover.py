@@ -18,7 +18,8 @@ Why it works, and why it is safe:
 * Nothing in ``states``/``statistics`` stores the entity id — those tables
   reference a numeric ``metadata_id``. Moving history is therefore just
   re-labelling the one ``states_meta`` / ``statistics_meta`` row, plus deleting
-  the target's own (discarded) rows. No per-state rewrite, any row count.
+  the target's own (discarded) rows — and the shared attribute rows only those
+  discarded states used (see ``db.py``). No per-state rewrite, any row count.
 * It runs entirely through the recorder's own SQLAlchemy session, so SQLite,
   MariaDB/MySQL and PostgreSQL are all handled by one code path.
 * It runs as a ``RecorderTask`` on the recorder thread. That is the only thread
@@ -41,15 +42,12 @@ from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.db_schema import (
     States,
     StatesMeta,
-    Statistics,
     StatisticsMeta,
-    StatisticsShortTerm,
 )
 from homeassistant.components.recorder.tasks import RecorderTask
 from homeassistant.components.recorder.util import session_scope
 from homeassistant.core import valid_entity_id
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from sqlalchemy import func
 
 from .const import (
     CONFLICT_FAIL,
@@ -61,6 +59,13 @@ from .const import (
     STATUS_RENAMED,
     STATUS_REPLACED,
     STATUS_SKIPPED,
+)
+from .db import (
+    count_rows,
+    count_statistics,
+    delete_unused_attributes,
+    discard_states,
+    discard_statistics,
 )
 
 if TYPE_CHECKING:
@@ -249,13 +254,24 @@ def _run_batch(
     """Process every pair in one transaction, then fix the caches."""
     outcomes: list[RenameOutcome] = []
     touched: set[str] = set()
+    discarded_attributes: set[int] = set()
+    removed_attributes: set[int] = set()
     with session_scope(session=instance.get_session()) as session:
         for req in requests:
-            outcome = _process_pair(session, req, on_conflict, dry_run)
+            outcome = _process_pair(
+                session, req, on_conflict, dry_run, discarded_attributes
+            )
             outcomes.append(outcome)
             if outcome.applied:
                 touched.add(req.old_entity_id)
                 touched.add(req.new_entity_id)
+        if discarded_attributes:
+            # One pass after all pairs: attribute rows the discarded states
+            # used, minus whatever surviving states still share. Sources are
+            # only relabelled, so their rows keep protecting their attributes.
+            removed_attributes = delete_unused_attributes(
+                instance, session, discarded_attributes
+            )
 
     # Log only after the transaction committed — these lines promise durable
     # changes (a failed batch is logged by the task's error handler instead).
@@ -297,6 +313,13 @@ def _run_batch(
         # 3. statistic_id -> metadata cache: no per-id evict, so reset it. Cheap
         #    (it re-populates lazily) and keeps this simple and correct.
         instance.statistics_meta_manager.reset()
+    if removed_attributes:
+        # 4. shared-attributes cache: a cached id whose row was just deleted
+        #    would let a future state reference a missing attributes row.
+        instance.state_attributes_manager.evict_purged(removed_attributes)
+        _LOGGER.debug(
+            "Deleted %d unused shared attribute rows", len(removed_attributes)
+        )
     return outcomes
 
 
@@ -305,6 +328,7 @@ def _process_pair(
     req: RenameRequest,
     on_conflict: str,
     dry_run: bool,
+    discarded_attributes: set[int],
 ) -> RenameOutcome:
     """Decide and (unless dry_run) apply the move for one source/target pair.
 
@@ -312,6 +336,9 @@ def _process_pair(
     when the source actually has it, and the target's matching stream is only
     discarded when the source is about to replace it. So renaming an entity that
     only has statistics never disturbs an unrelated states history on the target.
+
+    The attribute ids of discarded state rows are added to
+    ``discarded_attributes``; the batch cleans the unused ones up in one pass.
     """
     old = req.old_entity_id
     new = req.new_entity_id
@@ -346,10 +373,10 @@ def _process_pair(
         )
 
     # Counts first — before any row is moved or deleted.
-    moved_states = _count_rows(session, States, src_meta.metadata_id) if src_meta else 0
-    discarded_states = _count_rows(session, States, dst_meta.metadata_id) if states_collision and dst_meta else 0
-    moved_stats = _count_statistics(session, src_stat.id) if src_stat else 0
-    discarded_stats = _count_statistics(session, dst_stat.id) if stats_collision and dst_stat else 0
+    moved_states = count_rows(session, States, src_meta.metadata_id) if src_meta else 0
+    discarded_states = count_rows(session, States, dst_meta.metadata_id) if states_collision and dst_meta else 0
+    moved_stats = count_statistics(session, src_stat.id) if src_stat else 0
+    discarded_stats = count_statistics(session, dst_stat.id) if stats_collision and dst_stat else 0
 
     status = STATUS_REPLACED if collision else STATUS_RENAMED
 
@@ -363,11 +390,11 @@ def _process_pair(
 
     if src_meta is not None:
         if states_collision and dst_meta is not None:
-            _discard_states(session, dst_meta.metadata_id)
+            discarded_attributes |= discard_states(session, dst_meta.metadata_id)
         _relabel_states(session, src_meta.metadata_id, new)
     if src_stat is not None:
         if stats_collision and dst_stat is not None:
-            _discard_statistics(session, dst_stat.id)
+            discard_statistics(session, dst_stat.id)
         _relabel_statistics(session, src_stat.id, new)
 
     return RenameOutcome(
@@ -400,27 +427,6 @@ def _statistics_meta(session: Session, statistic_id: str) -> StatisticsMeta | No
     )
 
 
-def _count_rows(
-    session: Session,
-    model: type[States | Statistics | StatisticsShortTerm],
-    metadata_id: int,
-) -> int:
-    result = (
-        session.query(func.count())
-        .select_from(model)
-        .filter(model.metadata_id == metadata_id)
-        .scalar()
-    )
-    return int(result or 0)
-
-
-def _count_statistics(session: Session, metadata_id: int) -> int:
-    return sum(
-        _count_rows(session, model, metadata_id)
-        for model in (Statistics, StatisticsShortTerm)
-    )
-
-
 def _relabel_states(session: Session, metadata_id: int, new_entity_id: str) -> None:
     session.query(StatesMeta).filter(StatesMeta.metadata_id == metadata_id).update(
         {StatesMeta.entity_id: new_entity_id}, synchronize_session=False
@@ -433,30 +439,3 @@ def _relabel_statistics(session: Session, metadata_id: int, new_statistic_id: st
     )
 
 
-def _discard_states(session: Session, metadata_id: int) -> None:
-    """Delete every state row (and the meta row) for a metadata id."""
-    # Null the self-referential old_state_id chain first, so the bulk delete
-    # can't trip the states.old_state_id -> states.state_id foreign key on
-    # databases that enforce it.
-    session.query(States).filter(States.metadata_id == metadata_id).update(
-        {States.old_state_id: None}, synchronize_session=False
-    )
-    session.query(States).filter(States.metadata_id == metadata_id).delete(
-        synchronize_session=False
-    )
-    session.query(StatesMeta).filter(StatesMeta.metadata_id == metadata_id).delete(
-        synchronize_session=False
-    )
-
-
-def _discard_statistics(session: Session, metadata_id: int) -> None:
-    """Delete long-term + short-term statistics (and the meta row) for a metadata id."""
-    session.query(StatisticsShortTerm).filter(
-        StatisticsShortTerm.metadata_id == metadata_id
-    ).delete(synchronize_session=False)
-    session.query(Statistics).filter(Statistics.metadata_id == metadata_id).delete(
-        synchronize_session=False
-    )
-    session.query(StatisticsMeta).filter(StatisticsMeta.id == metadata_id).delete(
-        synchronize_session=False
-    )

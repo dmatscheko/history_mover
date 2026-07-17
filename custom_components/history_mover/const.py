@@ -4,9 +4,11 @@ from typing import Final
 
 DOMAIN: Final = "history_mover"
 
-# The one admin service. It moves recorder history from one entity id onto
-# another; a single call carries one or many rename pairs.
+# The two admin services: `rename` moves recorder history from one entity id
+# onto another (one call carries one or many pairs); `purge_orphans` deletes
+# every history no existing entity writes into anymore.
 SERVICE_RENAME: Final = "rename"
+SERVICE_PURGE_ORPHANS: Final = "purge_orphans"
 
 # Service / flow field names.
 ATTR_OLD_ENTITY_ID: Final = "old_entity_id"
@@ -15,6 +17,7 @@ ATTR_RENAMES: Final = "renames"
 ATTR_ON_CONFLICT: Final = "on_conflict"
 ATTR_DRY_RUN: Final = "dry_run"
 ATTR_SCAN_REFERENCES: Final = "scan_references"
+ATTR_REPACK: Final = "repack"
 # Flow-only field names (the bulk prefix step).
 ATTR_OLD_PREFIX: Final = "old_prefix"
 ATTR_NEW_PREFIX: Final = "new_prefix"

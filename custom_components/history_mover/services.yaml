@@ -40,3 +40,15 @@ rename:
       default: true
       selector:
         boolean:
+purge_orphans:
+  fields:
+    dry_run:
+      required: false
+      default: false
+      selector:
+        boolean:
+    repack:
+      required: false
+      default: false
+      selector:
+        boolean:

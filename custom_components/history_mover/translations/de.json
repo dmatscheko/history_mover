@@ -16,7 +16,8 @@
         "title": "Verlauf verschieben",
         "menu_options": {
           "single": "Einzelne Entität",
-          "bulk": "Mehrere (nach Präfix)"
+          "bulk": "Mehrere (nach Präfix)",
+          "purge": "Verwaiste Verläufe bereinigen"
         }
       },
       "single": {
@@ -50,6 +51,20 @@
       "confirm": {
         "title": "Bestätigen",
         "description": "Dies ändert die Recorder-Datenbank und kann nicht rückgängig gemacht werden. Prüfen und dann zum Anwenden absenden.\n\n{summary}"
+      },
+      "purge": {
+        "title": "Verwaiste Verläufe bereinigen",
+        "description": "Findet jeden Recorder-Verlauf, in den keine vorhandene Entität mehr schreibt — die ID hat keinen aktuellen Zustand und keinen Eintrag in der Entitätsregistrierung — und löscht dessen Zustände und Statistiken. Solche Verläufe bleiben typischerweise von entfernten Integrationen und gelöschten Entitäten zurück. Deaktivierte Entitäten und externe Statistiken werden nie angetastet. Vor dem Löschen wird eine Vorschau angezeigt.",
+        "data": {
+          "repack": "Datenbank anschließend umpacken"
+        },
+        "data_description": {
+          "repack": "Versucht, den freigewordenen Speicherplatz zurückzugewinnen, indem die gesamte Datenbankdatei neu geschrieben wird (dasselbe Umpacken wie bei der Aktion `recorder.purge`). Kann bei einer großen Datenbank eine Weile dauern."
+        }
+      },
+      "purge_confirm": {
+        "title": "Bestätigen",
+        "description": "Dies löscht die aufgeführten Verläufe aus der Recorder-Datenbank und kann nicht rückgängig gemacht werden. Die Verwaist-Prüfung wird beim Anwenden erneut ausgeführt — eine Entität, die seit dieser Vorschau wieder existiert, bleibt unangetastet. Prüfen und dann zum Anwenden absenden.\n\n{summary}"
       }
     },
     "error": {
@@ -59,7 +74,9 @@
       "invalid_target": "Dieses Ziel-Präfix erzeugt ungültige IDs — jedes Ergebnis muss eine kleingeschriebene `domain.object_id` sein.",
       "overlapping": "Die umbenannten IDs würden sich mit den umzubenennenden IDs überschneiden (das Ziel-Präfix darf das Quell-Präfix nicht erweitern). Teile dies in getrennte Vorgänge auf.",
       "no_matches": "Für dieses Quell-Präfix wurde kein Recorder-Verlauf gefunden.",
-      "apply_failed": "Das Anwenden des Verschiebens ist fehlgeschlagen oder hat das Zeitlimit überschritten. Prüfe das Home-Assistant-Log (Einträge „Moved history“ zeigen, was angewendet wurde), bevor du erneut absendest."
+      "apply_failed": "Das Anwenden des Verschiebens ist fehlgeschlagen oder hat das Zeitlimit überschritten. Prüfe das Home-Assistant-Log (Einträge „Moved history“ zeigen, was angewendet wurde), bevor du erneut absendest.",
+      "no_orphans": "Keine verwaisten Verläufe gefunden — jeder Recorder-Eintrag gehört zu einer vorhandenen Entität.",
+      "purge_failed": "Das Anwenden der Bereinigung ist fehlgeschlagen oder hat das Zeitlimit überschritten. Prüfe das Home-Assistant-Log (Einträge „Purged orphaned history“ zeigen, was gelöscht wurde), bevor du erneut absendest."
     }
   },
   "services": {
@@ -90,6 +107,20 @@
         "scan_references": {
           "name": "Verweise suchen",
           "description": "Nach dem Verschieben Konfigurationsdateien melden, die die alte ID noch nennen (Automationen, Skripte, Szenen, Dashboards, UI-Helfer). Es wird nichts bearbeitet."
+        }
+      }
+    },
+    "purge_orphans": {
+      "name": "Verwaiste Verläufe bereinigen",
+      "description": "Löscht jeden Recorder-Verlauf (Zustände und Langzeitstatistik), in den keine vorhandene Entität mehr schreibt — die ID hat keinen aktuellen Zustand und keinen Eintrag in der Entitätsregistrierung. Solche Verläufe bleiben typischerweise von entfernten Integrationen und gelöschten Entitäten zurück. Deaktivierte Entitäten und externe Statistiken (IDs mit Doppelpunkt, z. B. importierte Energiedaten) werden nie angetastet. Gibt die bereinigten IDs mit Zeilenanzahlen zurück; zuerst mit „Antwort zurückgeben“ und Testlauf aufrufen, um die Vorschau zu sehen.",
+      "fields": {
+        "dry_run": {
+          "name": "Testlauf",
+          "description": "Nur melden, welche verwaisten Verläufe gelöscht würden (mit Zeilenanzahlen). Es wird nichts geändert. Mit „Antwort zurückgeben“ aufrufen, um die Vorschau zu sehen."
+        },
+        "repack": {
+          "name": "Umpacken",
+          "description": "Nach dem Bereinigen versuchen, den freigewordenen Speicherplatz zurückzugewinnen, indem die gesamte Datenbankdatei neu geschrieben wird (dasselbe Umpacken wie bei der Aktion `recorder.purge`). Kann bei einer großen Datenbank eine Weile dauern."
         }
       }
     }

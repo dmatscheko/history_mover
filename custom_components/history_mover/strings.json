@@ -16,7 +16,8 @@
         "title": "Move history",
         "menu_options": {
           "single": "Single entity",
-          "bulk": "Bulk (by prefix)"
+          "bulk": "Bulk (by prefix)",
+          "purge": "Purge orphaned history"
         }
       },
       "single": {
@@ -50,6 +51,20 @@
       "confirm": {
         "title": "Confirm",
         "description": "This changes the recorder database and cannot be undone. Review, then submit to apply.\n\n{summary}"
+      },
+      "purge": {
+        "title": "Purge orphaned history",
+        "description": "Finds every recorder history that no existing entity writes into anymore — the id has no current state and no entity registry entry — and deletes its states and statistics. These are typically left over from removed integrations and deleted entities. Disabled entities and external statistics are never touched. You will see a preview before anything is deleted.",
+        "data": {
+          "repack": "Repack the database afterwards"
+        },
+        "data_description": {
+          "repack": "Tries to reclaim the freed disk space by rewriting the entire database file (the same repack as the `recorder.purge` action). Can take a while on a large database."
+        }
+      },
+      "purge_confirm": {
+        "title": "Confirm",
+        "description": "This deletes the listed histories from the recorder database and cannot be undone. The orphan check is re-run on apply, so an entity that has come back to life since this preview is left untouched. Review, then submit to apply.\n\n{summary}"
       }
     },
     "error": {
@@ -59,7 +74,9 @@
       "invalid_target": "This target prefix produces invalid ids — each result must be a lower-case `domain.object_id`.",
       "overlapping": "The renamed ids would overlap the ids being renamed (the target prefix must not extend the source prefix). Split this into separate operations.",
       "no_matches": "No recorder history was found for that source prefix.",
-      "apply_failed": "Applying the move failed or timed out. Check the Home Assistant log ('Moved history' entries show what was applied) before submitting again."
+      "apply_failed": "Applying the move failed or timed out. Check the Home Assistant log ('Moved history' entries show what was applied) before submitting again.",
+      "no_orphans": "No orphaned history found — every recorder entry belongs to an existing entity.",
+      "purge_failed": "Applying the purge failed or timed out. Check the Home Assistant log ('Purged orphaned history' entries show what was deleted) before submitting again."
     }
   },
   "services": {
@@ -90,6 +107,20 @@
         "scan_references": {
           "name": "Scan references",
           "description": "After moving, report configuration files that still mention the old id (automations, scripts, scenes, dashboards, UI helpers). Nothing is edited."
+        }
+      }
+    },
+    "purge_orphans": {
+      "name": "Purge orphaned history",
+      "description": "Deletes every recorder history (states and long-term statistics) that no existing entity writes into anymore — the id has no current state and no entity registry entry. Typically left over from removed integrations and deleted entities. Disabled entities and external statistics (ids with a colon, e.g. imported energy data) are never touched. Returns the purged ids with row counts; call with 'Return response' and Dry run first to preview.",
+      "fields": {
+        "dry_run": {
+          "name": "Dry run",
+          "description": "Only report which orphaned histories would be deleted (with row counts). Nothing is changed. Call with 'Return response' to see the preview."
+        },
+        "repack": {
+          "name": "Repack",
+          "description": "After purging, try to reclaim the freed disk space by rewriting the entire database file (the same repack as the `recorder.purge` action). Can take a while on a large database."
         }
       }
     }

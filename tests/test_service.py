@@ -10,9 +10,19 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.history_mover.const import DOMAIN, SERVICE_RENAME
+from custom_components.history_mover.const import (
+    DOMAIN,
+    SERVICE_PURGE_ORPHANS,
+    SERVICE_RENAME,
+)
 
-from .common import count_states, record_states
+from .common import (
+    add_statistics,
+    count_states,
+    count_statistics,
+    record_states,
+    remove_entity,
+)
 
 
 async def _setup(hass: HomeAssistant) -> None:
@@ -21,6 +31,7 @@ async def _setup(hass: HomeAssistant) -> None:
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     assert hass.services.has_service(DOMAIN, SERVICE_RENAME)
+    assert hass.services.has_service(DOMAIN, SERVICE_PURGE_ORPHANS)
 
 
 async def _call(hass: HomeAssistant, **data: object) -> dict:
@@ -151,6 +162,44 @@ async def test_reference_scan_reports_and_notifies(
     assert "sensor.old" in response["references"]
     assert response["references"]["sensor.old"][0]["source"] == "automations.yaml"
     assert notify.called
+
+
+async def test_purge_orphans_service_end_to_end(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """Preview with dry_run, then apply — both through the registered service."""
+    await _setup(hass)
+    await record_states(hass, "sensor.svc_alive", ["1"])
+    await record_states(hass, "sensor.svc_gone", ["1", "2"])
+    await remove_entity(hass, "sensor.svc_gone")
+    await add_statistics(hass, "sensor.svc_gone", [1.0])
+
+    preview = await hass.services.async_call(
+        DOMAIN,
+        SERVICE_PURGE_ORPHANS,
+        {"dry_run": True},
+        blocking=True,
+        return_response=True,
+    )
+    assert preview["dry_run"] is True
+    assert preview["repack"] is False
+    assert preview["orphans"] == [
+        {
+            "entity_id": "sensor.svc_gone",
+            "applied": False,
+            "deleted_states": 3,
+            "deleted_statistics": 1,
+        }
+    ]
+    assert await count_states(hass, "sensor.svc_gone") == 3  # untouched
+
+    response = await hass.services.async_call(
+        DOMAIN, SERVICE_PURGE_ORPHANS, {}, blocking=True, return_response=True
+    )
+    assert response["orphans"][0]["applied"] is True
+    assert await count_states(hass, "sensor.svc_gone") is None
+    assert await count_statistics(hass, "sensor.svc_gone") is None
+    assert await count_states(hass, "sensor.svc_alive") == 1
 
 
 async def test_reference_scan_can_be_disabled(

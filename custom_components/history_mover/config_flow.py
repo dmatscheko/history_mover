@@ -1,9 +1,10 @@
-"""Config flow (add the tool) and options flow (the guided rename wizard).
+"""Config flow (add the tool) and options flow (the guided wizards).
 
 The config entry carries no data — it exists only so the tool has a card in
 Settings whose **Configure** button opens the options flow. That flow is the
-UI twin of the ``rename`` service: pick a single pair or a bulk prefix swap,
-see a dry-run preview of exactly what moves and what gets discarded, then apply.
+UI twin of the two services: pick a single pair or a bulk prefix swap for a
+``rename``, or the orphan purge, see a dry-run preview of exactly what moves
+or gets deleted, then apply.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from homeassistant.core import callback, valid_entity_id
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -35,12 +37,13 @@ from .const import (
     ATTR_OLD_ENTITY_ID,
     ATTR_OLD_PREFIX,
     ATTR_ON_CONFLICT,
+    ATTR_REPACK,
     CONFLICT_MODES,
     DEFAULT_ON_CONFLICT,
     DOMAIN,
 )
 from .mover import RenameRequest, async_list_history_ids
-from .services import async_perform_rename
+from .services import async_perform_purge, async_perform_rename
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -90,17 +93,21 @@ class HistoryMoverConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class HistoryMoverOptionsFlow(OptionsFlow):
-    """Pick single or bulk, preview the move, confirm, apply."""
+    """Pick a rename (single or bulk) or the orphan purge; preview, confirm, apply."""
 
     def __init__(self) -> None:
         self._pairs: list[RenameRequest] = []
         self._on_conflict: str = DEFAULT_ON_CONFLICT
         self._summary: str | None = None
+        self._repack: bool = False
+        self._purge_ids: set[str] = set()
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        return self.async_show_menu(step_id="init", menu_options=["single", "bulk"])
+        return self.async_show_menu(
+            step_id="init", menu_options=["single", "bulk", "purge"]
+        )
 
     async def async_step_single(
         self, user_input: dict[str, Any] | None = None
@@ -220,6 +227,64 @@ class HistoryMoverOptionsFlow(OptionsFlow):
             description_placeholders={"summary": self._summary},
         )
 
+    async def async_step_purge(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Choose whether to repack, then look for orphans (a dry run)."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            preview = await async_perform_purge(
+                self.hass, dry_run=True, repack=user_input[ATTR_REPACK]
+            )
+            if not preview["orphans"]:
+                errors["base"] = "no_orphans"
+            else:
+                self._repack = user_input[ATTR_REPACK]
+                self._purge_ids = {
+                    item["entity_id"] for item in preview["orphans"]
+                }
+                self._summary = _format_purge_preview(preview)
+                return await self.async_step_purge_confirm()
+        return self.async_show_form(
+            step_id="purge",
+            data_schema=vol.Schema(
+                {vol.Required(ATTR_REPACK, default=False): BooleanSelector()}
+            ),
+            errors=errors,
+        )
+
+    async def async_step_purge_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show the orphan preview, then apply on submit.
+
+        The apply is restricted to the previewed ids *and* re-checks each is
+        still orphaned — nothing unseen is deleted, nothing revived is lost.
+        """
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                await async_perform_purge(
+                    self.hass,
+                    dry_run=False,
+                    repack=self._repack,
+                    restrict_to=self._purge_ids,
+                )
+            except HomeAssistantError:
+                # Keep the flow (and the cached preview) alive with a real
+                # error instead of the generic unknown-error toast.
+                _LOGGER.exception("Applying the purge from the guided flow failed")
+                errors["base"] = "purge_failed"
+            else:
+                return self.async_create_entry(title="", data={})
+        return self.async_show_form(
+            step_id="purge_confirm",
+            data_schema=vol.Schema({}),
+            errors=errors,
+            # Always set by async_step_purge before this step is reachable.
+            description_placeholders={"summary": self._summary or ""},
+        )
+
 
 # The confirm dialog lists at most this many pairs; a bulk move of hundreds
 # gets totals plus a "… and N more" line instead of an unreadable wall.
@@ -253,5 +318,30 @@ def _format_preview(preview: dict[str, Any]) -> str:
             f"{sum(i['moved_statistics'] for i in renames)} statistics; discard "
             f"{sum(i['discarded_states'] for i in renames)} / "
             f"{sum(i['discarded_statistics'] for i in renames)}\n",
+        )
+    return "\n".join(lines)
+
+
+def _format_purge_preview(preview: dict[str, Any]) -> str:
+    """A markdown summary for the purge confirm screen: totals, then one line
+    per orphan, capped at ``_PREVIEW_MAX_PAIRS``, plus the repack choice."""
+    orphans: list[dict[str, Any]] = preview["orphans"]
+    lines = [
+        f"**{len(orphans)} orphaned "
+        f"{'histories' if len(orphans) > 1 else 'history'}** — delete "
+        f"{sum(i['deleted_states'] for i in orphans)} states / "
+        f"{sum(i['deleted_statistics'] for i in orphans)} statistics rows\n"
+    ]
+    lines.extend(
+        f"- `{item['entity_id']}`: {item['deleted_states']} states / "
+        f"{item['deleted_statistics']} statistics"
+        for item in orphans[:_PREVIEW_MAX_PAIRS]
+    )
+    if len(orphans) > _PREVIEW_MAX_PAIRS:
+        lines.append(f"- … and {len(orphans) - _PREVIEW_MAX_PAIRS} more")
+    if preview["repack"]:
+        lines.append(
+            "\nThe database is repacked afterwards to reclaim the freed disk"
+            " space — this can take a while on a large database."
         )
     return "\n".join(lines)

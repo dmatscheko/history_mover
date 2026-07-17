@@ -1,7 +1,8 @@
 # Contributing
 
-Thanks for helping! History Mover is a small, focused integration — a recorder
-engine, one service, a guided flow, and a report-only reference scan.
+Thanks for helping! History Mover is a small, focused integration — two recorder
+engines (rename and orphan purge), two services, a guided flow, and a
+report-only reference scan.
 
 ## Development
 

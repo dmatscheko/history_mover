@@ -27,6 +27,7 @@ from custom_components.history_mover.mover import (
 
 from .common import (
     add_statistics,
+    attribute_payloads,
     count_states,
     count_statistics,
     record_states,
@@ -77,6 +78,23 @@ async def test_rename_onto_free_target(
     assert outcomes[0].discarded_states == 0
     assert await count_states(hass, "sensor.old") is None
     assert await count_states(hass, "sensor.brand_new") == 3
+
+
+async def test_replace_cleans_up_discarded_attributes(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """Discarding the target's states also drops the shared attribute rows only
+    those states used — the moved source keeps its own (it is just relabelled)."""
+    await record_states(hass, "sensor.attr_old", ["1"], attributes={"src_marker": 1})
+    await record_states(hass, "sensor.attr_new", ["2"], attributes={"dst_marker": 2})
+
+    outcomes = await async_move_history(
+        hass, [RenameRequest("sensor.attr_old", "sensor.attr_new")]
+    )
+    assert outcomes[0].status == STATUS_REPLACED
+    payloads = "\n".join(await attribute_payloads(hass))
+    assert "dst_marker" not in payloads  # the discarded target's attributes
+    assert "src_marker" in payloads  # the adopted history's attributes
 
 
 async def test_move_statistics(recorder_mock: Recorder, hass: HomeAssistant) -> None:

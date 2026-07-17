@@ -1,4 +1,4 @@
-"""Tests for the guided rename options flow (single + bulk)."""
+"""Tests for the guided options flow (single + bulk rename, orphan purge)."""
 
 from __future__ import annotations
 
@@ -11,10 +11,13 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.history_mover.config_flow import _format_preview
+from custom_components.history_mover.config_flow import (
+    _format_preview,
+    _format_purge_preview,
+)
 from custom_components.history_mover.const import DOMAIN
 
-from .common import count_states, record_states
+from .common import count_states, record_states, remove_entity
 
 
 async def _setup_entry(hass: HomeAssistant) -> ConfigEntry:
@@ -305,6 +308,143 @@ async def test_bulk_rejects_overlapping_prefixes(
     await record_states(hass, "sensor.bulkov_x_a", ["2"])
     errors = await _bulk_errors(hass, entry, "sensor.bulkov_", "sensor.bulkov_x_")
     assert errors == {"new_prefix": "overlapping"}
+
+
+async def test_purge_via_options(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """The full guided purge: menu → repack choice → preview → apply."""
+    entry = await _setup_entry(hass)
+    await record_states(hass, "sensor.optpurge_alive", ["1"])
+    await record_states(hass, "sensor.optpurge_gone", ["1", "2"])
+    await remove_entity(hass, "sensor.optpurge_gone")
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "purge"}
+    )
+    assert result["step_id"] == "purge"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"repack": False}
+    )
+    assert result["step_id"] == "purge_confirm"
+    summary = result["description_placeholders"]["summary"]
+    assert "sensor.optpurge_gone" in summary
+    assert "3 states" in summary  # 2 values + the recorded removal
+    assert "sensor.optpurge_alive" not in summary
+    assert "repacked" not in summary  # repack was not ticked
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    assert await count_states(hass, "sensor.optpurge_gone") is None
+    assert await count_states(hass, "sensor.optpurge_alive") == 1
+
+
+async def test_purge_reports_no_orphans(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """With nothing orphaned the form re-shows with a clear error."""
+    entry = await _setup_entry(hass)
+    await record_states(hass, "sensor.optpurge_live", ["1"])
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "purge"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"repack": True}
+    )
+    assert result["step_id"] == "purge"
+    assert result["errors"] == {"base": "no_orphans"}
+
+
+async def test_purge_apply_failure_shows_form_error_and_allows_retry(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """An engine failure while applying keeps the flow (and the cached preview)
+    alive with a purge_failed error — and the apply is restricted to exactly
+    the previewed ids."""
+    entry = await _setup_entry(hass)
+    preview = {
+        "dry_run": True,
+        "repack": True,
+        "orphans": [
+            {
+                "entity_id": "sensor.pf_gone",
+                "applied": False,
+                "deleted_states": 1,
+                "deleted_statistics": 0,
+            }
+        ],
+    }
+    with patch(
+        "custom_components.history_mover.config_flow.async_perform_purge",
+        side_effect=[preview, HomeAssistantError("recorder timeout"), preview],
+    ) as perform:
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "purge"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"repack": True}
+        )
+        assert result["step_id"] == "purge_confirm"  # call 1: the preview
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {}
+        )  # call 2: apply fails
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "purge_confirm"
+        assert result["errors"] == {"base": "purge_failed"}
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {}
+        )  # call 3: retry succeeds
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+    # Exactly three engine calls: the preview was cached, not re-queried.
+    assert perform.call_count == 3
+    # Every apply carried the repack choice and the previewed ids.
+    for call in perform.call_args_list[1:]:
+        assert call.kwargs["dry_run"] is False
+        assert call.kwargs["repack"] is True
+        assert call.kwargs["restrict_to"] == {"sensor.pf_gone"}
+
+
+def _purge_item(index: int) -> dict[str, object]:
+    return {
+        "entity_id": f"sensor.orph_{index}",
+        "applied": False,
+        "deleted_states": 3,
+        "deleted_statistics": 2,
+    }
+
+
+def test_format_purge_preview_caps_large_lists_and_adds_totals() -> None:
+    """Hundreds of orphans get totals plus the first ids, not an unreadable
+    wall — and the repack choice is spelled out."""
+    preview = {
+        "dry_run": True,
+        "repack": True,
+        "orphans": [_purge_item(i) for i in range(20)],
+    }
+    text = _format_purge_preview(preview)
+    assert "**20 orphaned histories**" in text
+    assert "delete 60 states / 40 statistics rows" in text
+    assert "… and 5 more" in text
+    assert "sensor.orph_14" in text  # the 15th listed id
+    assert "sensor.orph_15" not in text  # capped after that
+    assert "repacked" in text
+
+
+def test_format_purge_preview_single_orphan_without_repack() -> None:
+    text = _format_purge_preview(
+        {"dry_run": True, "repack": False, "orphans": [_purge_item(0)]}
+    )
+    assert "**1 orphaned history**" in text
+    assert "`sensor.orph_0`: 3 states / 2 statistics" in text
+    assert "repacked" not in text
 
 
 async def test_bulk_normalises_prefix_case(
