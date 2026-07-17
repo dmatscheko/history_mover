@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
+from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
@@ -20,7 +21,7 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlow,
 )
-from homeassistant.core import callback, valid_entity_id
+from homeassistant.core import HomeAssistant, callback, valid_entity_id
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.selector import (
@@ -31,6 +32,7 @@ from homeassistant.helpers.selector import (
     TextSelector,
     TextSelectorConfig,
 )
+from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_DOMAINS,
@@ -230,7 +232,10 @@ class HistoryMoverOptionsFlow(OptionsFlow):
                 dry_run=True,
                 scan_references=False,
             )
-            self._summary = _format_preview(preview)
+            saved = await _async_save_full_preview(
+                self.hass, "Move history", _format_preview(preview, limit=None)
+            )
+            self._summary = _format_preview(preview, saved=saved)
         return self.async_show_form(
             step_id="confirm",
             data_schema=vol.Schema({}),
@@ -266,7 +271,12 @@ class HistoryMoverOptionsFlow(OptionsFlow):
                     self._delete_ids = {
                         item["entity_id"] for item in preview["deletions"]
                     }
-                    self._summary = _format_delete_preview(preview)
+                    saved = await _async_save_full_preview(
+                        self.hass,
+                        "Delete history",
+                        _format_delete_preview(preview, limit=None),
+                    )
+                    self._summary = _format_delete_preview(preview, saved=saved)
                     return await self.async_step_delete_confirm()
         return self.async_show_form(
             step_id="delete",
@@ -335,7 +345,12 @@ class HistoryMoverOptionsFlow(OptionsFlow):
                 self._purge_ids = {
                     item["entity_id"] for item in preview["orphans"]
                 }
-                self._summary = _format_purge_preview(preview)
+                saved = await _async_save_full_preview(
+                    self.hass,
+                    "Purge orphaned history",
+                    _format_purge_preview(preview, limit=None),
+                )
+                self._summary = _format_purge_preview(preview, saved=saved)
                 return await self.async_step_purge_confirm()
         return self.async_show_form(
             step_id="purge",
@@ -379,23 +394,68 @@ class HistoryMoverOptionsFlow(OptionsFlow):
 
 
 # The confirm dialog lists at most this many pairs; a bulk move of hundreds
-# gets totals plus a "… and N more" line instead of an unreadable wall.
+# gets totals plus a "… and N more" line instead of an unreadable wall. The
+# complete, uncapped preview is saved to this file in the config folder
+# (overwritten by each new preview), so even thousands of entries can be
+# reviewed in full before confirming.
 _PREVIEW_MAX_PAIRS = 15
+_PREVIEW_FILE = "history_mover_preview.md"
 
 
-def _format_preview(preview: dict[str, Any]) -> str:
+async def _async_save_full_preview(
+    hass: HomeAssistant, action: str, body: str
+) -> bool:
+    """Write the complete (uncapped) preview to the config folder.
+
+    Returns whether the write succeeded — the dialog only points at the file
+    when it is actually there.
+    """
+    path = Path(hass.config.path(_PREVIEW_FILE))
+    content = (
+        f"# History Mover preview — {action}\n\n"
+        f"Generated {dt_util.now().isoformat(timespec='seconds')} — "
+        "overwritten by the next preview.\n\n"
+        f"{body}\n"
+    )
+
+    def _write() -> None:
+        path.write_text(content, encoding="utf-8")
+
+    try:
+        await hass.async_add_executor_job(_write)
+    except OSError:
+        _LOGGER.warning("Could not save the full preview to %s", path, exc_info=True)
+        return False
+    return True
+
+
+def _cap_line(hidden: int, noun: str, saved: bool) -> str:
+    """The "… and N more" line — pointing at the full-preview file if it exists."""
+    line = f"- … and {hidden} {noun}"
+    if saved:
+        line += f" — the complete list is in `{_PREVIEW_FILE}` in your config folder"
+    return line
+
+
+def _format_preview(
+    preview: dict[str, Any],
+    *,
+    limit: int | None = _PREVIEW_MAX_PAIRS,
+    saved: bool = False,
+) -> str:
     """A markdown summary for the confirm screen: totals for multi-pair
-    batches, then one line per pair, capped at ``_PREVIEW_MAX_PAIRS``."""
+    batches, then one line per pair, capped at ``limit`` (None = uncapped,
+    for the full-preview file)."""
     renames: list[dict[str, Any]] = preview["renames"]
     lines = [
         f"- `{item['old_entity_id']}` → `{item['new_entity_id']}`: "
         f"**{item['status']}** (move {item['moved_states']} states / "
         f"{item['moved_statistics']} statistics; discard {item['discarded_states']} / "
         f"{item['discarded_statistics']})"
-        for item in renames[:_PREVIEW_MAX_PAIRS]
+        for item in renames[:limit]
     ]
-    if len(renames) > _PREVIEW_MAX_PAIRS:
-        lines.append(f"- … and {len(renames) - _PREVIEW_MAX_PAIRS} more pairs")
+    if limit is not None and len(renames) > limit:
+        lines.append(_cap_line(len(renames) - limit, "more pairs", saved))
     if len(renames) > 1:
         statuses = ", ".join(
             f"{count} {status}"
@@ -421,10 +481,14 @@ _REPACK_NOTE = (
 
 
 def _deletion_lines(
-    items: list[dict[str, Any]], noun_one: str, noun_many: str
+    items: list[dict[str, Any]],
+    noun_one: str,
+    noun_many: str,
+    limit: int | None,
+    saved: bool,
 ) -> list[str]:
-    """Totals, then one line per id, capped at ``_PREVIEW_MAX_PAIRS`` — the
-    shared body of the delete and purge confirm summaries."""
+    """Totals, then one line per id, capped at ``limit`` (None = uncapped) —
+    the shared body of the delete and purge confirm summaries."""
     lines = [
         f"**{len(items)} {noun_many if len(items) > 1 else noun_one}** — delete "
         f"{sum(i['deleted_states'] for i in items)} states / "
@@ -433,26 +497,38 @@ def _deletion_lines(
     lines.extend(
         f"- `{item['entity_id']}`: {item['deleted_states']} states / "
         f"{item['deleted_statistics']} statistics"
-        for item in items[:_PREVIEW_MAX_PAIRS]
+        for item in items[:limit]
     )
-    if len(items) > _PREVIEW_MAX_PAIRS:
-        lines.append(f"- … and {len(items) - _PREVIEW_MAX_PAIRS} more")
+    if limit is not None and len(items) > limit:
+        lines.append(_cap_line(len(items) - limit, "more", saved))
     return lines
 
 
-def _format_purge_preview(preview: dict[str, Any]) -> str:
+def _format_purge_preview(
+    preview: dict[str, Any],
+    *,
+    limit: int | None = _PREVIEW_MAX_PAIRS,
+    saved: bool = False,
+) -> str:
     """A markdown summary for the purge confirm screen: totals, then one line
     per orphan, plus the repack choice."""
-    lines = _deletion_lines(preview["orphans"], "orphaned history", "orphaned histories")
+    lines = _deletion_lines(
+        preview["orphans"], "orphaned history", "orphaned histories", limit, saved
+    )
     if preview["repack"]:
         lines.append(_REPACK_NOTE)
     return "\n".join(lines)
 
 
-def _format_delete_preview(preview: dict[str, Any]) -> str:
+def _format_delete_preview(
+    preview: dict[str, Any],
+    *,
+    limit: int | None = _PREVIEW_MAX_PAIRS,
+    saved: bool = False,
+) -> str:
     """A markdown summary for the delete confirm screen: totals and per-id
     lines, warnings for selection parts that matched nothing, the repack choice."""
-    lines = _deletion_lines(preview["deletions"], "history", "histories")
+    lines = _deletion_lines(preview["deletions"], "history", "histories", limit, saved)
     not_found = [
         ("No recorder history found for", preview["not_found_entity_ids"]),
         ("No recorder history found in domain", preview["not_found_domains"]),

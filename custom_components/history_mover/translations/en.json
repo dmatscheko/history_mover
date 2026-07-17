@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "History Mover",
-        "description": "Add History Mover. It adds a `history_mover.rename` action and a guided rename screen (this card's **Configure** button) that move recorder history from one entity to another."
+        "description": "Add History Mover. It adds the `history_mover.rename`, `history_mover.delete` and `history_mover.purge_orphans` actions and a guided screen (this card's **Configure** button) to move, delete and clean up recorder history."
       }
     },
     "abort": {
@@ -13,10 +13,10 @@
   "options": {
     "step": {
       "init": {
-        "title": "Move history",
+        "title": "Move or delete history",
         "menu_options": {
-          "single": "Single entity",
-          "bulk": "Bulk (by prefix)",
+          "single": "Move single entity",
+          "bulk": "Bulk move (by prefix)",
           "delete": "Delete history (by entity or domain)",
           "purge": "Purge orphaned history"
         }

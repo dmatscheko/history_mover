@@ -1,7 +1,8 @@
-"""Tests for the guided options flow (single + bulk rename, orphan purge)."""
+"""Tests for the guided options flow (single + bulk rename, delete, purge)."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 from homeassistant.components.recorder import Recorder
@@ -10,8 +11,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.components.recorder.common import (
+    async_wait_recording_done,
+)
 
 from custom_components.history_mover.config_flow import (
+    _PREVIEW_FILE,
     _format_delete_preview,
     _format_preview,
     _format_purge_preview,
@@ -577,6 +582,109 @@ def test_format_purge_preview_single_orphan_without_repack() -> None:
     assert "**1 orphaned history**" in text
     assert "`sensor.orph_0`: 3 states / 2 statistics" in text
     assert "repacked" not in text
+
+
+def test_format_preview_uncapped_for_the_file() -> None:
+    """limit=None renders every entry with no cap line — the file variant."""
+    preview = {"renames": [_preview_item(i, "renamed") for i in range(20)]}
+    text = _format_preview(preview, limit=None)
+    assert "sensor.old_19" in text  # the very last pair is present
+    assert "… and" not in text
+
+    purge = {
+        "dry_run": True,
+        "repack": False,
+        "orphans": [_purge_item(i) for i in range(20)],
+    }
+    text = _format_purge_preview(purge, limit=None)
+    assert "sensor.orph_19" in text
+    assert "… and" not in text
+
+
+def test_format_preview_cap_line_points_at_saved_file() -> None:
+    """With the full preview saved, the cap line says where to find it."""
+    preview = {"renames": [_preview_item(i, "renamed") for i in range(20)]}
+    assert (
+        "- … and 5 more pairs — the complete list is in "
+        "`history_mover_preview.md` in your config folder"
+    ) in _format_preview(preview, saved=True)
+
+    purge = {
+        "dry_run": True,
+        "repack": False,
+        "orphans": [_purge_item(i) for i in range(20)],
+    }
+    assert (
+        "- … and 5 more — the complete list is in "
+        "`history_mover_preview.md` in your config folder"
+    ) in _format_purge_preview(purge, saved=True)
+
+
+async def _make_orphans(hass: HomeAssistant, count: int) -> list[str]:
+    """Record one state each for ``count`` entities, then remove them all."""
+    ids = [f"sensor.many_{index:02d}" for index in range(count)]
+    for entity_id in ids:
+        hass.states.async_set(entity_id, "1")
+    await async_wait_recording_done(hass)
+    for entity_id in ids:
+        hass.states.async_remove(entity_id)
+    await async_wait_recording_done(hass)
+    return ids
+
+
+async def test_purge_preview_saves_complete_list_to_file(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """A preview larger than the dialog cap points at the preview file — and
+    the file holds every entry."""
+    entry = await _setup_entry(hass)
+    ids = await _make_orphans(hass, 18)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "purge"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"repack": False}
+    )
+    assert result["step_id"] == "purge_confirm"
+    summary = result["description_placeholders"]["summary"]
+    assert "**18 orphaned histories**" in summary
+    assert (
+        "… and 3 more — the complete list is in `history_mover_preview.md`"
+        in summary
+    )
+    assert ids[17] not in summary  # capped in the dialog...
+
+    content = await hass.async_add_executor_job(
+        Path(hass.config.path(_PREVIEW_FILE)).read_text
+    )
+    assert "History Mover preview — Purge orphaned history" in content
+    for entity_id in ids:  # ...but complete in the file
+        assert entity_id in content
+    assert "… and" not in content
+
+
+async def test_purge_preview_survives_unwritable_file(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """If the preview file cannot be written, the flow still works — the cap
+    line just does not point at a file that is not there."""
+    entry = await _setup_entry(hass)
+    await _make_orphans(hass, 18)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "purge"}
+    )
+    with patch.object(Path, "write_text", side_effect=OSError("read-only")):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"repack": False}
+        )
+    assert result["step_id"] == "purge_confirm"
+    summary = result["description_placeholders"]["summary"]
+    assert "… and 3 more" in summary
+    assert "history_mover_preview.md" not in summary
 
 
 def test_format_delete_preview_warns_about_not_found_parts() -> None:

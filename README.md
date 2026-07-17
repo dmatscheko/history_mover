@@ -77,7 +77,11 @@ On the **History Mover** card, click **Configure**:
   deleted.
 
 Either way you get a **preview** (which ids are affected, how many
-states/statistics rows) before you confirm.
+states/statistics rows) before you confirm. The dialog shows totals plus the
+first 15 entries; the **complete list is saved to `history_mover_preview.md`**
+in your config folder (overwritten by each new preview), so even a
+several-thousand-entry cleanup can be reviewed in full — the actions'
+dry-run responses contain the full list too.
 
 ### The `history_mover.rename` action
 

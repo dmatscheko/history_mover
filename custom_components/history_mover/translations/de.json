@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "History Mover",
-        "description": "History Mover hinzufügen. Es stellt die Aktion `history_mover.rename` und einen geführten Umbenennen-Dialog (Schaltfläche **Konfigurieren** auf dieser Karte) bereit, die den Recorder-Verlauf von einer Entität auf eine andere verschieben."
+        "description": "History Mover hinzufügen. Es stellt die Aktionen `history_mover.rename`, `history_mover.delete` und `history_mover.purge_orphans` sowie einen geführten Dialog (Schaltfläche **Konfigurieren** auf dieser Karte) bereit, um Recorder-Verläufe zu verschieben, zu löschen und aufzuräumen."
       }
     },
     "abort": {
@@ -13,10 +13,10 @@
   "options": {
     "step": {
       "init": {
-        "title": "Verlauf verschieben",
+        "title": "Verlauf verschieben oder löschen",
         "menu_options": {
-          "single": "Einzelne Entität",
-          "bulk": "Mehrere (nach Präfix)",
+          "single": "Einzelne Entität verschieben",
+          "bulk": "Mehrere verschieben (nach Präfix)",
           "delete": "Verlauf löschen (nach Entität oder Domain)",
           "purge": "Verwaiste Verläufe bereinigen"
         }
